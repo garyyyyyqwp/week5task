@@ -306,3 +306,152 @@ def _make_text_response(text: str):
     response = MagicMock()
     response.choices = [choice]
     return response
+
+
+# ---------------------------------------------------------------------------
+# ASR Mock
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def mock_asr(monkeypatch):
+    """Mock ASR transcribe to return deterministic text without API calls."""
+
+    async def _mock_transcribe(
+        audio_data: bytes,
+        content_type: str = "audio/webm",
+        language: str | None = "zh",
+        prompt: str | None = None,
+    ) -> str:
+        if len(audio_data) < 100:
+            return ""
+        return "人工智能如何改变教育"
+
+    monkeypatch.setattr("app.services.asr.transcribe", _mock_transcribe)
+    return _mock_transcribe
+
+
+@pytest.fixture()
+def mock_asr_error(monkeypatch):
+    """Mock ASR to simulate API failure."""
+
+    async def _mock_fail(*args, **kwargs):
+        from app.services.asr import ASRError
+        raise ASRError("模拟ASR服务不可用")
+
+    monkeypatch.setattr("app.services.asr.transcribe", _mock_fail)
+
+
+# ---------------------------------------------------------------------------
+# TTS Mock
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def mock_tts(monkeypatch):
+    """Mock TTS synthesize to return dummy audio bytes without API calls."""
+
+    async def _mock_synthesize(
+        text: str,
+        voice: str | None = None,
+        speed: float = 1.0,
+        response_format: str = "mp3",
+    ) -> bytes:
+        return b"\xff\xfb\x90\x00" + b"\x00" * 256
+
+    async def _mock_synthesize_streaming(
+        text: str,
+        voice: str | None = None,
+    ) -> bytes:
+        return b"\xff\xfb\x90\x00" + b"\x00" * 256
+
+    monkeypatch.setattr("app.services.tts.synthesize", _mock_synthesize)
+    monkeypatch.setattr(
+        "app.services.tts.synthesize_streaming", _mock_synthesize_streaming
+    )
+    return _mock_synthesize
+
+
+@pytest.fixture()
+def mock_tts_error(monkeypatch):
+    """Mock TTS to simulate API failure."""
+
+    async def _mock_fail(*args, **kwargs):
+        from app.services.tts import TTSError
+        raise TTSError("模拟TTS服务不可用")
+
+    monkeypatch.setattr("app.services.tts.synthesize", _mock_fail)
+
+
+# ---------------------------------------------------------------------------
+# Multimodal Mock Helpers
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def mock_multimodal_agent(monkeypatch):
+    """Mock run_agent_stream for multimodal chat tests to avoid real LLM calls.
+
+    Also mocks the voice loop and clears sessions between tests.
+    """
+
+    async def _mock_run_agent_stream(**kwargs):
+        events = [
+            {
+                "event": "thought",
+                "data": '{"step": 1, "thought": "我来分析这张图片中的题目。"}',
+            },
+            {
+                "event": "answer",
+                "data": '{"answer": "这是关于二次函数的题目。解题步骤如下：...", "hit_max_steps": false}',
+            },
+            {
+                "event": "done",
+                "data": '{"session_id": "test123", "total_steps": 1, "template": "basic", "hit_max_steps": false}',
+            },
+        ]
+        for e in events:
+            yield e
+
+    async def _mock_multimodal_stream(**kwargs):
+        yield {"event": "asr_result", "data": '{"text": "这道题怎么做？"}'}
+        yield {
+            "event": "thought",
+            "data": '{"step": 1, "thought": "分析图片中的题目..."}',
+        }
+        yield {
+            "event": "answer",
+            "data": '{"answer": "这是一道几何题。连接AB两点，根据勾股定理...", "hit_max_steps": false}',
+        }
+        yield {
+            "event": "done",
+            "data": '{"session_id": "m_test123", "total_steps": 1, "template": "basic", "hit_max_steps": false, "multimodal_session_id": "m_test123"}',
+        }
+        yield {
+            "event": "session",
+            "data": '{"multimodal_session_id": "m_test123"}',
+        }
+
+    monkeypatch.setattr(
+        "app.services.multimodal_chat.run_multimodal_chat_stream",
+        _mock_multimodal_stream,
+    )
+
+    async def _mock_voice_loop(**kwargs):
+        return {
+            "text": "这是一道几何题。连接AB两点...",
+            "audio_base64": "//uQZAAAAA=",
+            "session_id": "vl_test123",
+        }
+
+    monkeypatch.setattr(
+        "app.services.multimodal_chat.run_voice_loop",
+        _mock_voice_loop,
+    )
+
+
+@pytest.fixture(autouse=True)
+def clear_multimodal_sessions():
+    """Clear multimodal sessions before and after each test."""
+    from app.services.multimodal_chat import clear_multimodal_sessions
+
+    clear_multimodal_sessions()
+    yield
+    clear_multimodal_sessions()
