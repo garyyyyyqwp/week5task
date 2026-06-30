@@ -74,3 +74,24 @@ AGENT_MAX_STEPS: int = int(get_env("AGENT_MAX_STEPS", "10"))
 AGENT_DEFAULT_STRATEGY: str = get_env("AGENT_DEFAULT_STRATEGY", "basic")
 AGENT_SESSION_DIR: str = get_env("AGENT_SESSION_DIR", "./data/sessions")
 SEARCH_WEB_QUERY_MAX_LENGTH: int = int(get_env("SEARCH_WEB_QUERY_MAX_LENGTH", "200"))
+
+# --- ASR (Speech-to-Text) ---
+ASR_PROVIDER: str = get_env("ASR_PROVIDER", "zhipu")
+ASR_MODEL: str = get_env("ASR_MODEL", "whisper-1")
+ASR_API_KEY: str = get_env("ASR_API_KEY", OPENAI_API_KEY)
+ASR_BASE_URL: str = get_env("ASR_BASE_URL", "https://api.openai.com/v1/")
+
+# --- TTS (Text-to-Speech) ---
+TTS_PROVIDER: str = get_env("TTS_PROVIDER", "zhipu")
+TTS_MODEL: str = get_env("TTS_MODEL", "tts-1")
+TTS_VOICE: str = get_env("TTS_VOICE", "alloy")
+TTS_API_KEY: str = get_env("TTS_API_KEY", OPENAI_API_KEY)
+TTS_BASE_URL: str = get_env("TTS_BASE_URL", "https://api.openai.com/v1/")
+
+# --- Audio Limits ---
+MAX_AUDIO_SIZE_MB: int = int(get_env("MAX_AUDIO_SIZE_MB", "10"))
+MAX_AUDIO_DURATION_SECONDS: int = int(get_env("MAX_AUDIO_DURATION_SECONDS", "120"))
+MAX_IMAGE_SIZE_MB: int = int(get_env("MAX_IMAGE_SIZE_MB", "10"))
+
+# --- Multimodal Chat ---
+MULTIMODAL_MAX_HISTORY_TURNS: int = int(get_env("MULTIMODAL_MAX_HISTORY_TURNS", "20"))
