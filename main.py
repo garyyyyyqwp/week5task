@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.routers import agent
+from app.routers import agent, multimodal
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +50,7 @@ async def startup():
         "./chroma_data",
         "./data/sessions",
         "./data/images",
+        "./data/audio",
     ]:
         os.makedirs(d, exist_ok=True)
 
@@ -59,6 +60,7 @@ async def startup():
 # ---------------------------------------------------------------------------
 
 app.include_router(agent.router, prefix="/api/v1/agent")
+app.include_router(multimodal.router, prefix="/api/v1/multimodal")
 
 
 # ---------------------------------------------------------------------------
