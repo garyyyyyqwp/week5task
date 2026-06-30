@@ -2,218 +2,187 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI 研究助手 Agent</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>AI 学习助手 — 能看·会听·会说</title>
 <style>
 :root {
-  --bg-0: #000000; --bg-1: #0a0a0a; --bg-2: #141414; --bg-3: #1a1a1a; --bg-4: #222;
+  --bg-0: #000; --bg-1: #0a0a0a; --bg-2: #141414; --bg-3: #1a1a1a; --bg-4: #222;
   --text-1: #ededed; --text-2: #a1a1a1; --text-3: #888;
-  --accent-blue: #0070f3; --accent-green: #00b878; --accent-amber: #f5a623;
-  --accent-purple: #7928ca; --accent-red: #e00; --accent-cyan: #0ff;
+  --accent: #0070f3; --accent-green: #00b878; --accent-red: #e00; --accent-purple: #7928ca;
+  --radius: 10px; --radius-sm: 6px;
   --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'Geist Mono', 'SF Mono', 'Fira Code', monospace;
-  --radius: 8px; --radius-sm: 6px;
-  --shadow-card: 0 0 0 1px rgba(255,255,255,.08), 0 4px 16px rgba(0,0,0,.4);
-  --shadow-hover: 0 0 0 1px rgba(255,255,255,.12), 0 8px 24px rgba(0,0,0,.5);
 }
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:var(--font);background:var(--bg-0);color:var(--text-1);line-height:1.6;overflow:hidden;height:100vh}
-a{color:var(--accent-blue);text-decoration:none}
+body{font-family:var(--font);background:var(--bg-0);color:var(--text-1);height:100vh;overflow:hidden}
 button{font-family:var(--font);cursor:pointer;border:none;background:none;color:inherit}
-input,textarea,select{font-family:var(--font);background:var(--bg-2);border:1px solid rgba(255,255,255,.1);color:var(--text-1);border-radius:var(--radius-sm);padding:10px 14px;outline:none;width:100%;font-size:14px}
-input:focus,textarea:focus{border-color:var(--accent-blue)}
-textarea{resize:vertical;min-height:80px}
+input,textarea{font-family:var(--font);background:var(--bg-2);border:1px solid rgba(255,255,255,.08);color:var(--text-1);border-radius:var(--radius-sm);padding:10px 14px;outline:none;font-size:14px;width:100%}
+textarea{resize:none;min-height:44px;max-height:120px;line-height:1.5}
+textarea:focus, input:focus{border-color:var(--accent)}
 
 /* Layout */
-.app{display:flex;height:100vh}
-.sidebar{width:240px;min-width:240px;background:var(--bg-1);border-right:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;padding:20px 0}
-.sidebar-logo{padding:0 20px 24px;font-size:15px;font-weight:600;letter-spacing:-.3px;display:flex;align-items:center;gap:10px}
-.sidebar-logo .icon{width:28px;height:28px;background:var(--accent-blue);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px}
-.nav-items{flex:1}
-.nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;font-size:13.5px;color:var(--text-2);cursor:pointer;transition:all .15s}
-.nav-item:hover{color:var(--text-1);background:rgba(255,255,255,.04)}
-.nav-item.active{color:var(--text-1);background:rgba(255,255,255,.06);font-weight:500}
-.nav-item .badge{font-size:11px;background:var(--bg-3);padding:2px 8px;border-radius:20px;color:var(--text-3)}
+.app{max-width:720px;margin:0 auto;height:100vh;display:flex;flex-direction:column}
+.header{padding:14px 20px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.header .logo{font-size:16px;font-weight:600;letter-spacing:-.3px}
+.header .badge{font-size:10px;background:var(--accent);color:#fff;padding:2px 8px;border-radius:10px;opacity:.85}
 
-.main{flex:1;overflow-y:auto;padding:32px 40px;max-width:960px}
-.main-full{max-width:1200px}
+/* Chat area */
+.chat-area{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:14px}
+.chat-area:empty::after{content:'👋 拍照提问、按住录音、或输入文字';display:block;text-align:center;color:var(--text-3);padding:50px 0;font-size:14px}
 
-/* Cards & Containers */
-.card{background:var(--bg-2);border-radius:var(--radius);box-shadow:var(--shadow-card);padding:20px 24px}
-.card:hover{box-shadow:var(--shadow-hover)}
-.section-title{font-size:18px;font-weight:600;letter-spacing:-.3px;margin-bottom:20px}
-.section-subtitle{font-size:13px;color:var(--text-3);margin-top:4px}
+/* Message bubbles */
+.msg{max-width:90%;padding:12px 16px;border-radius:var(--radius);line-height:1.7;font-size:14px;word-break:break-word;animation:fadeIn .2s}
+.msg.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:2px}
+.msg.ai{align-self:flex-start;background:var(--bg-2);border:1px solid rgba(255,255,255,.06);border-bottom-left-radius:2px}
+.msg .meta{font-size:10px;color:var(--text-3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:8px}
+.msg.ai .meta{color:var(--accent-purple)}
+.msg .content{white-space:pre-wrap}
+.msg .content code{font-family:var(--font-mono);background:var(--bg-4);padding:1px 5px;border-radius:3px;font-size:12.5px}
+.msg .content strong{color:var(--text-1)}
+.msg .streaming{cursor:default}
 
-/* Agent Chat */
-.chat-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
-.template-pills{display:flex;gap:6px}
-.pill{padding:6px 14px;border-radius:20px;font-size:12.5px;font-weight:500;background:var(--bg-3);color:var(--text-2);border:1px solid rgba(255,255,255,.06);cursor:pointer;transition:all .15s}
-.pill:hover{color:var(--text-1);border-color:rgba(255,255,255,.12)}
-.pill.active{background:var(--accent-blue);color:#fff;border-color:var(--accent-blue)}
-.max-steps{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-3)}
-.max-steps input{width:60px;padding:4px 8px;text-align:center;font-size:12px}
+/* Image in message */
+.msg .msg-image{max-width:180px;border-radius:var(--radius-sm);margin-bottom:6px;overflow:hidden}
+.msg .msg-image img{width:100%;height:auto;border-radius:var(--radius-sm);display:block}
 
-.chat-input-area{display:flex;gap:10px;margin-bottom:24px}
-.chat-input-area textarea{flex:1}
-.btn-send{padding:10px 24px;background:var(--accent-blue);color:#fff;border-radius:var(--radius-sm);font-size:13.5px;font-weight:500;white-space:nowrap;transition:opacity .15s}
+/* Play button on AI messages */
+.btn-play{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;background:var(--bg-3);border:1px solid rgba(255,255,255,.08);color:var(--text-2);border-radius:20px;font-size:12px;cursor:pointer;margin-top:8px;transition:all .15s}
+.btn-play:hover{color:var(--text-1);border-color:rgba(255,255,255,.15)}
+.btn-play.playing{background:var(--accent-green);color:#fff;border-color:var(--accent-green)}
+
+/* Thinking section in AI bubble */
+.thinking-block{font-size:11px;color:var(--text-3);padding:6px 10px;margin-top:8px;background:var(--bg-0);border-radius:var(--radius-sm);border-left:3px solid var(--accent);max-height:100px;overflow-y:auto;line-height:1.5;display:none}
+.thinking-block.visible{display:block}
+
+/* Loading indicator */
+.loading{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.15);border-top:2px solid var(--accent);border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Input bar */
+.bottom-bar{padding:10px 16px 14px;border-top:1px solid rgba(255,255,255,.06);flex-shrink:0;display:flex;flex-direction:column;gap:8px}
+.input-row{display:flex;gap:8px;align-items:flex-end}
+.btn-send{padding:10px 20px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap;transition:opacity .15s}
 .btn-send:hover{opacity:.85}
 .btn-send:disabled{opacity:.4;cursor:not-allowed}
 
-/* Step Cards */
-.steps-container{display:flex;flex-direction:column;gap:12px;margin-bottom:20px}
-.step-card{background:var(--bg-2);border-radius:var(--radius);box-shadow:var(--shadow-card);overflow:hidden;transition:box-shadow .15s}
-.step-card:hover{box-shadow:var(--shadow-hover)}
-.step-header{display:flex;align-items:center;gap:10px;padding:12px 18px;cursor:pointer;user-select:none}
-.step-num{font-size:11px;font-weight:600;color:#fff;background:var(--bg-4);padding:2px 8px;border-radius:12px;letter-spacing:.5px}
-.step-tool-badge{font-size:11px;font-weight:500;padding:2px 10px;border-radius:12px;letter-spacing:.3px}
-.step-tool-badge.search{background:rgba(0,112,243,.15);color:var(--accent-blue)}
-.step-tool-badge.vision{background:rgba(121,40,202,.15);color:var(--accent-purple)}
-.step-tool-badge.calc{background:rgba(0,184,120,.15);color:var(--accent-green)}
-.step-tool-badge.time{background:rgba(245,166,35,.15);color:var(--accent-amber)}
-.step-tool-badge.web{background:rgba(0,255,255,.12);color:var(--accent-cyan)}
-.step-expand{margin-left:auto;font-size:10px;color:var(--text-3);transition:transform .2s}
-.step-card.open .step-expand{transform:rotate(180deg)}
-.step-body{display:none;padding:0 18px 14px}
-.step-card.open .step-body{display:block}
+/* Action buttons */
+.action-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn-action{display:flex;align-items:center;gap:5px;padding:6px 12px;background:var(--bg-2);border:1px solid rgba(255,255,255,.06);color:var(--text-2);border-radius:20px;font-size:12px;cursor:pointer;transition:all .15s}
+.btn-action:hover{color:var(--text-1);border-color:rgba(255,255,255,.12)}
+.btn-action.recording{background:var(--accent-red);color:#fff;border-color:var(--accent-red)}
+.btn-action .icon{font-size:14px;line-height:1}
 
-.step-section{margin-bottom:10px;padding-left:12px;border-left:3px solid transparent}
-.step-section.thought{border-color:var(--accent-blue)}
-.step-section.action{border-color:var(--accent-amber)}
-.step-section.observation{border-color:var(--accent-green)}
-.step-label{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px}
-.step-label.thought-label{color:var(--accent-blue)}
-.step-label.action-label{color:var(--accent-amber)}
-.step-label.obs-label{color:var(--accent-green)}
-.step-content{font-size:13px;color:var(--text-2);line-height:1.7;word-break:break-word}
-.step-content code{font-family:var(--font-mono);font-size:12px;background:var(--bg-4);padding:1px 6px;border-radius:3px}
+/* Recording indicator */
+.rec-dot{display:none;width:8px;height:8px;border-radius:50%;background:var(--accent-red);margin-right:4px;animation:pulse 1s infinite}
+.rec-dot.active{display:inline-block}
+.rec-text{display:none;font-size:11px;color:var(--accent-red)}
+.rec-text.active{display:inline}
 
-/* Final Answer */
-.answer-block{background:var(--bg-2);border-radius:var(--radius);box-shadow:var(--shadow-card);padding:18px 22px;border-left:3px solid var(--accent-purple);margin-top:16px}
-.answer-label{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--accent-purple);margin-bottom:8px}
-.answer-text{font-size:14.5px;line-height:1.8;color:var(--text-1)}
+/* Image preview */
+.img-chip{display:none;align-items:center;gap:6px;padding:4px 10px;background:var(--bg-3);border-radius:20px;font-size:12px;color:var(--text-2)}
+.img-chip.visible{display:flex}
+.img-chip .remove{color:var(--accent-red);cursor:pointer;font-weight:700;font-size:14px;line-height:1}
 
-/* Session History */
-.sessions-table{width:100%;border-collapse:collapse}
-.sessions-table th{text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text-3);padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.06)}
-.sessions-table td{padding:10px 14px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.04)}
-.sessions-table tr{cursor:pointer;transition:background .1s}
-.sessions-table tbody tr:hover{background:rgba(255,255,255,.03)}
-
-/* Evaluation */
-.eval-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
-.eval-card{background:var(--bg-2);border-radius:var(--radius);box-shadow:var(--shadow-card);padding:18px}
-.eval-card .template-name{font-size:13px;font-weight:600;margin-bottom:12px}
-.eval-card.best{border:1px solid var(--accent-green)}
-.score-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12.5px}
-.score-row .label{color:var(--text-3)}
-.score-row .value{font-family:var(--font-mono);font-weight:500}
-.score-bar{height:4px;background:var(--bg-4);border-radius:2px;flex:1;margin:0 10px;position:relative;overflow:hidden}
-.score-bar .fill{height:100%;border-radius:2px;transition:width .5s}
-
-/* Loading */
-.loading{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--accent-blue);animation:pulse 1.2s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:.3;transform:scale(.9)}50%{opacity:1;transform:scale(1.1)}}
+/* Status bar */
+.status-bar{font-size:11px;color:var(--text-3);text-align:center;padding:2px 0;display:none;min-height:18px}
+.status-bar.visible{display:block}
 
 /* Toast */
-#toast-container{position:fixed;top:20px;right:20px;z-index:999;display:flex;flex-direction:column;gap:8px}
-.toast{padding:12px 18px;border-radius:var(--radius-sm);font-size:13px;box-shadow:var(--shadow-card);animation:slideIn .3s;max-width:320px}
-.toast.success{background:rgba(0,184,120,.15);color:var(--accent-green);border:1px solid rgba(0,184,120,.2)}
+.toast-container{position:fixed;top:16px;right:16px;z-index:999;display:flex;flex-direction:column;gap:6px}
+.toast{padding:10px 16px;border-radius:var(--radius-sm);font-size:13px;max-width:300px;animation:slideIn .3s}
+.toast.info{background:rgba(0,112,243,.15);color:var(--accent);border:1px solid rgba(0,112,243,.2)}
 .toast.error{background:rgba(224,0,0,.12);color:var(--accent-red);border:1px solid rgba(224,0,0,.2)}
-.toast.info{background:rgba(0,112,243,.12);color:var(--accent-blue);border:1px solid rgba(0,112,243,.2)}
+.toast.success{background:rgba(0,184,120,.12);color:var(--accent-green);border:1px solid rgba(0,184,120,.2)}
 @keyframes slideIn{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1.2)}}
 
-/* Empty state */
-.empty-state{text-align:center;padding:60px 20px}
-.empty-state .emoji{font-size:48px;margin-bottom:16px}
-.empty-state .desc{color:var(--text-3);font-size:14px;margin-bottom:20px}
+.hidden-input{display:none}
 
-/* Stats grid */
-.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
-.stat-item{background:var(--bg-2);border-radius:var(--radius);box-shadow:var(--shadow-card);padding:16px 18px}
-.stat-item .stat-val{font-size:24px;font-weight:700;letter-spacing:-.5px;font-family:var(--font-mono)}
-.stat-item .stat-label{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
-
-/* Responsive */
-@media(max-width:768px){.sidebar{display:none}.main{padding:20px}.eval-grid{grid-template-columns:1fr}.stats-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){
+  .btn-action{font-size:11px;padding:5px 10px}
+  .header{padding:12px 14px}
+  .chat-area{padding:12px 14px}
+  .bottom-bar{padding:8px 12px 12px}
+}
 </style>
 </head>
 <body>
 
-<div id="toast-container"></div>
+<div class="toast-container" id="toasts"></div>
 
 <div class="app">
-  <nav class="sidebar">
-    <div class="sidebar-logo">
-      <div class="icon">🤖</div>
-      <span>AI Agent</span>
-    </div>
-    <div class="nav-items">
-      <div class="nav-item active" data-page="chat" onclick="navigate('chat')">
-        <span>💬</span> Agent 对话
-      </div>
-      <div class="nav-item" data-page="sessions" onclick="navigate('sessions')">
-        <span>📋</span> 会话历史
-      </div>
-      <div class="nav-item" data-page="evaluate" onclick="navigate('evaluate')">
-        <span>📊</span> Agent 评估
-      </div>
-    </div>
-  </nav>
+  <div class="header">
+    <span class="logo">🤖 AI 学习助手</span>
+    <span class="badge">多模态</span>
+    <span style="font-size:10px;color:var(--text-3);margin-left:auto" id="session-tag">新会话</span>
+  </div>
 
-  <main class="main" id="main-content"></main>
+  <div class="chat-area" id="chat-area"></div>
+
+  <div class="bottom-bar">
+    <div class="status-bar" id="status-bar"></div>
+    <div class="input-row">
+      <textarea id="text-input" placeholder="输入问题、拍照上传或按住录音..." rows="1"></textarea>
+      <button class="btn-send" id="btn-send" onclick="sendMessage()">发送</button>
+    </div>
+    <div class="action-row">
+      <button class="btn-action" onclick="document.getElementById('camera-input').click()">
+        <span class="icon">📷</span> 拍照
+      </button>
+      <label class="btn-action">
+        <span class="icon">🖼</span> 上传
+        <input type="file" accept="image/*" class="hidden-input" onchange="handleImageUpload(this)">
+      </label>
+      <button class="btn-action" id="btn-record" onmousedown="startRecording()" onmouseup="stopRecording()" onmouseleave="stopRecording()" ontouchstart="startRecording()" ontouchend="stopRecording()">
+        <span class="icon">🎤</span> 录音
+      </button>
+      <span class="rec-dot" id="rec-dot"></span>
+      <span class="rec-text" id="rec-text">录音中...</span>
+      <div class="img-chip" id="img-chip">
+        📎 <span id="img-name"></span>
+        <span class="remove" onclick="clearImage(event)">✕</span>
+      </div>
+    </div>
+  </div>
 </div>
 
+<input type="file" accept="image/*" capture="environment" class="hidden-input" id="camera-input" onchange="handleImageUpload(this)">
+<audio id="tts-audio" style="display:none"></audio>
+
 <script>
-// ---------------------------------------------------------------
+// =========================================================================
 // State
-// ---------------------------------------------------------------
-const API = '/api/v1/agent';
-const state = { page: 'chat', sessions: [] };
+// =========================================================================
+const API = '/api/v1/multimodal';
+let currentSessionId = null;
+let currentImageBase64 = null;
+let mediaRecorder = null;
+let audioChunks = [];
+let ttsAudio = document.getElementById('tts-audio');
 
-// ---------------------------------------------------------------
-// Navigation
-// ---------------------------------------------------------------
-function navigate(page) {
-  state.page = page;
-  document.querySelectorAll('.nav-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.page === page);
-  });
-  render();
-}
-
-function render() {
-  const main = document.getElementById('main-content');
-  switch (state.page) {
-    case 'chat': renderChat(main); break;
-    case 'sessions': renderSessions(main); break;
-    case 'evaluate': renderEvaluate(main); break;
-  }
-}
-
-// ---------------------------------------------------------------
+// =========================================================================
 // Toast
-// ---------------------------------------------------------------
-function toast(msg, type = 'info') {
-  const el = document.createElement('div');
+// =========================================================================
+function toast(msg, type) {
+  type = type || 'info';
+  var el = document.createElement('div');
   el.className = 'toast ' + type;
   el.textContent = msg;
-  document.getElementById('toast-container').appendChild(el);
-  setTimeout(() => el.remove(), 3500);
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(function() { el.remove(); }, 3500);
 }
 
-// ---------------------------------------------------------------
+// =========================================================================
 // Escape HTML
-// ---------------------------------------------------------------
+// =========================================================================
 function esc(s) {
   if (!s) return '';
-  const d = document.createElement('div');
+  var d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
 }
 
-// ---------------------------------------------------------------
-// Markdown-like renderer (simple)
-// ---------------------------------------------------------------
 function md(text) {
   if (!text) return '';
   return esc(text)
@@ -222,624 +191,347 @@ function md(text) {
     .replace(/\n/g, '<br>');
 }
 
-// ---------------------------------------------------------------
-// Chat Page
-// ---------------------------------------------------------------
-function renderChat(el) {
-  el.innerHTML = `
-    <div class="section-title">
-      AI 研究助手
-      <div class="section-subtitle">基于 ReAct 模式，Agent 自主选择工具、多步推理、实时展示思考过程</div>
-    </div>
-
-    <div class="chat-controls">
-      <div class="template-pills">
-        <button class="pill active" data-t="basic" onclick="selectTemplate(this)">基础模式</button>
-        <button class="pill" data-t="structured" onclick="selectTemplate(this)">结构化推理</button>
-        <button class="pill" data-t="self_correcting" onclick="selectTemplate(this)">自我纠错</button>
-      </div>
-      <div class="max-steps">
-        最大步数:
-        <input type="number" id="max-steps" value="10" min="1" max="20">
-      </div>
-    </div>
-
-    <div class="chat-input-area">
-      <textarea id="agent-question" placeholder="输入你的问题，例如：帮我查一下 Transformer 论文的提出时间，算一下距今多少天。也可以上传图片让 Agent 直接看图回答。" rows="3"></textarea>
-      <button class="btn-send" id="btn-send" onclick="runAgentChat()">发送</button>
-    </div>
-    <div class="chat-controls" style="margin-top:0;margin-bottom:16px">
-      <label style="font-size:12px;color:var(--text-3);cursor:pointer;display:flex;align-items:center;gap:4px">
-        <span style="font-size:16px">📎</span> 上传图片（可选）
-        <input type="file" id="image-upload" accept="image/*" style="display:none" onchange="previewImage(this)">
-        <span id="image-preview-name" style="color:var(--accent-blue);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-        <button id="clear-image" onclick="clearImage(event)" style="font-size:11px;color:var(--accent-red);display:none;padding:2px 6px;border-radius:3px">✕ 清除</button>
-      </label>
-    </div>
-
-    <div id="agent-result"></div>
-  `;
-}
-
-function selectTemplate(btn) {
-  document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
-  btn.classList.add('active');
-}
-
-// ---------------------------------------------------------------
-// Image Upload Handling
-// ---------------------------------------------------------------
-let _imageBase64 = null;
-
-function previewImage(input) {
-  const file = input.files[0];
+// =========================================================================
+// Image handling
+// =========================================================================
+function handleImageUpload(input) {
+  var file = input.files[0];
   if (!file) return;
-
-  const reader = new FileReader();
+  var reader = new FileReader();
   reader.onload = function(e) {
-    _imageBase64 = e.target.result; // data:image/...;base64,...
-    const nameSpan = document.getElementById('image-preview-name');
-    const clearBtn = document.getElementById('clear-image');
-    if (nameSpan) {
-      nameSpan.textContent = file.name + ' (' + Math.round(file.size/1024) + 'KB)';
-    }
-    if (clearBtn) clearBtn.style.display = 'inline-block';
-    toast('图片已加载，Agent 将直接查看图片内容', 'info');
+    currentImageBase64 = e.target.result;
+    document.getElementById('img-chip').classList.add('visible');
+    document.getElementById('img-name').textContent = file.name;
+    toast('图片已加载，AI 将直接查看图片内容', 'info');
   };
   reader.readAsDataURL(file);
 }
 
-function clearImage(event) {
-  event.stopPropagation();
-  _imageBase64 = null;
-  const input = document.getElementById('image-upload');
-  const nameSpan = document.getElementById('image-preview-name');
-  const clearBtn = document.getElementById('clear-image');
-  if (input) input.value = '';
-  if (nameSpan) nameSpan.textContent = '';
-  if (clearBtn) clearBtn.style.display = 'none';
+function clearImage(e) {
+  e.stopPropagation();
+  currentImageBase64 = null;
+  document.getElementById('img-chip').classList.remove('visible');
+  document.getElementById('camera-input').value = '';
 }
 
-// ---------------------------------------------------------------
-// Agent Chat SSE
-// ---------------------------------------------------------------
-async function runAgentChat() {
-  const question = document.getElementById('agent-question').value.trim();
-  if (!question) { toast('请输入问题', 'error'); return; }
+// =========================================================================
+// Voice recording
+// =========================================================================
+function startRecording() {
+  var btn = document.getElementById('btn-record');
+  if (btn.classList.contains('recording')) return;
+  audioChunks = [];
 
-  const template = document.querySelector('.pill.active')?.dataset.t || 'basic';
-  const maxSteps = parseInt(document.getElementById('max-steps').value) || 10;
-  const resultDiv = document.getElementById('agent-result');
-  const btn = document.getElementById('btn-send');
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+    mediaRecorder.ondataavailable = function(e) { audioChunks.push(e.data); };
+    mediaRecorder.onstop = function() {
+      stream.getTracks().forEach(function(t) { t.stop(); });
+      processRecording();
+    };
+    mediaRecorder.start();
+    btn.classList.add('recording');
+    document.getElementById('rec-dot').classList.add('active');
+    document.getElementById('rec-text').classList.add('active');
+    toast('录音中，松开发送...', 'info');
+  }).catch(function(e) {
+    toast('无法访问麦克风: ' + e.message, 'error');
+  });
+}
 
+function stopRecording() {
+  var btn = document.getElementById('btn-record');
+  if (!btn.classList.contains('recording')) return;
+  btn.classList.remove('recording');
+  document.getElementById('rec-dot').classList.remove('active');
+  document.getElementById('rec-text').classList.remove('active');
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+  }
+}
+
+function processRecording() {
+  if (!audioChunks.length) return;
+  var blob = new Blob(audioChunks, { type: 'audio/webm' });
+  blobToBase64(blob).then(function(base64) {
+    addMessage('user', '🎤 语音输入', null);
+    setStatus('正在识别语音...', 'visible');
+
+    var body = {
+      audio_base64: base64,
+      template: 'basic',
+      max_steps: 10,
+      session_id: currentSessionId
+    };
+    if (currentImageBase64) body.image_base64 = currentImageBase64;
+
+    fetch(API + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function(res) {
+      if (!res.ok) return res.json().then(function(e) { throw new Error(e.detail || '请求失败'); });
+      return handleSSEStream(res);
+    }).catch(function(e) {
+      toast('语音处理失败: ' + e.message, 'error');
+      setStatus('', '');
+    });
+  });
+}
+
+function blobToBase64(blob) {
+  return new Promise(function(resolve) {
+    var reader = new FileReader();
+    reader.onload = function() {
+      resolve(reader.result.split(',')[1]);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+// =========================================================================
+// Text send
+// =========================================================================
+function sendMessage() {
+  var input = document.getElementById('text-input');
+  var text = input.value.trim();
+  if (!text && !currentImageBase64) { toast('请输入问题或上传图片', 'error'); return; }
+
+  var preview = '';
+  if (currentImageBase64) {
+    preview = '<div class="msg-image"><img src="' + currentImageBase64 + '" alt="uploaded"></div>';
+  }
+  addMessage('user', text || '📎 查看图片', preview);
+
+  input.value = '';
+  input.style.height = 'auto';
+  var btn = document.getElementById('btn-send');
   btn.disabled = true;
   btn.textContent = '思考中...';
 
-  // Initialize result area
-  resultDiv.innerHTML = `
-    <div class="steps-container" id="steps-container"></div>
-    <div id="answer-area"></div>
-    <div style="display:flex;align-items:center;gap:8px;margin-top:12px" id="streaming-status">
-      <div class="loading"></div>
-      <span style="font-size:12px;color:var(--text-3)">Agent 正在推理...</span>
-    </div>
-  `;
+  var body = {
+    template: 'basic',
+    max_steps: 10,
+    session_id: currentSessionId
+  };
+  if (text) body.text = text;
+  if (currentImageBase64) body.image_base64 = currentImageBase64;
 
-  let currentStepCard = null;
-  let stepCount = 0;
+  fetch(API + '/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(function(res) {
+    if (!res.ok) return res.json().then(function(e) { throw new Error(e.detail || '请求失败'); });
+    return handleSSEStream(res);
+  }).catch(function(e) {
+    toast('请求失败: ' + e.message, 'error');
+  }).finally(function() {
+    btn.disabled = false;
+    btn.textContent = '发送';
+  });
+}
 
-  try {
-    const body = { question, template, max_steps: maxSteps };
-    if (_imageBase64) {
-      body.image_base64 = _imageBase64;
-    }
-    const response = await fetch(API + '/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+// =========================================================================
+// SSE Stream handling
+// =========================================================================
+function handleSSEStream(response) {
+  var reader = response.body.getReader();
+  var decoder = new TextDecoder();
+  var buffer = '';
+  var currentEvent = '';
+  var aiBubble = null;
+  var answerText = '';
+  var thinkingDiv = null;
 
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.detail || '请求失败');
-    }
+  setStatus('AI 正在思考...', 'visible');
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
+  function pump() {
+    return reader.read().then(function(result) {
+      if (result.done) {
+        setStatus('', '');
+        return;
+      }
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
+      buffer += decoder.decode(result.value, { stream: true });
+      var lines = buffer.split('\n');
       buffer = lines.pop();
 
-      for (const line of lines) {
-        if (line.startsWith('event: ')) {
-          // Store event type for next data line
-          buffer = 'event:' + line.slice(7);
-        } else if (line.startsWith('data: ')) {
-          const dataStr = line.slice(6);
-          try {
-            const data = JSON.parse(dataStr);
-            // Determine event type from preceding event line or from data structure
-            const eventType = _lastEventType || guessEventType(data);
-            handleSSEEvent(eventType, data, resultDiv);
-          } catch (e) {
-            // Try to parse without event type
-          }
-          _lastEventType = null;
-        }
-      }
-    }
-  } catch (e) {
-    toast('请求出错: ' + e.message, 'error');
-  }
-
-  // Remove streaming status
-  const status = document.getElementById('streaming-status');
-  if (status) status.remove();
-
-  btn.disabled = false;
-  btn.textContent = '发送';
-}
-
-let _lastEventType = null;
-
-function guessEventType(data) {
-  if (data.thought) return 'thought';
-  if (data.tool) return 'action';
-  if (data.result) return 'observation';
-  if (data.answer !== undefined) return 'answer';
-  if (data.session_id) return 'done';
-  return 'unknown';
-}
-
-function handleSSEEvent(type, data, resultDiv) {
-  const container = document.getElementById('steps-container');
-
-  if (type === 'thought') {
-    stepCount = data.step || stepCount + 1;
-    // Create a new step card
-    currentStepCard = document.createElement('div');
-    currentStepCard.className = 'step-card open';
-    currentStepCard.innerHTML = `
-      <div class="step-header" onclick="toggleStep(this)">
-        <span class="step-num">Step ${stepCount}</span>
-        <span class="step-tool-badge" id="step-badge-${stepCount}">思考中...</span>
-        <span class="step-expand">▼</span>
-      </div>
-      <div class="step-body" id="step-body-${stepCount}">
-        <div class="step-section thought">
-          <div class="step-label thought-label">💭 THOUGHT</div>
-          <div class="step-content">${md(data.thought)}</div>
-        </div>
-        <div id="step-action-${stepCount}"></div>
-        <div id="step-obs-${stepCount}"></div>
-      </div>
-    `;
-    container.appendChild(currentStepCard);
-  }
-
-  else if (type === 'action') {
-    const step = data.step || stepCount;
-    const toolName = data.tool || '';
-    const toolInput = data.input || {};
-    const badge = document.getElementById('step-badge-' + step);
-    const actionDiv = document.getElementById('step-action-' + step);
-
-    // Update badge
-    if (badge) {
-      const badgeClass = getToolBadgeClass(toolName);
-      badge.className = 'step-tool-badge ' + badgeClass;
-      badge.textContent = getToolDisplayName(toolName);
-    }
-
-    // Add action section
-    if (actionDiv) {
-      actionDiv.innerHTML = `
-        <div class="step-section action" style="margin-top:8px">
-          <div class="step-label action-label">🔧 ACTION</div>
-          <div class="step-content">
-            <strong>${esc(toolName)}</strong>
-            <code>${esc(JSON.stringify(toolInput, null, 2))}</code>
-          </div>
-        </div>
-      `;
-    }
-
-    // Auto-collapse previous steps, expand current
-    container.querySelectorAll('.step-card').forEach((card, i) => {
-      if (i < container.children.length - 1) card.classList.remove('open');
-    });
-  }
-
-  else if (type === 'observation') {
-    const step = data.step || stepCount;
-    const obsDiv = document.getElementById('step-obs-' + step);
-
-    if (obsDiv) {
-      obsDiv.innerHTML = `
-        <div class="step-section observation" style="margin-top:8px">
-          <div class="step-label obs-label">👁 OBSERVATION</div>
-          <div class="step-content">${md(data.result)}</div>
-        </div>
-      `;
-    }
-  }
-
-  else if (type === 'answer') {
-    const answerArea = document.getElementById('answer-area');
-    if (answerArea) {
-      const maxStepsWarn = data.hit_max_steps
-        ? '<div style="font-size:11px;color:var(--accent-amber);margin-top:6px">⚠️ 已达到最大步数限制</div>'
-        : '';
-      answerArea.innerHTML = `
-        <div class="answer-block">
-          <div class="answer-label">✨ FINAL ANSWER</div>
-          <div class="answer-text">${md(data.answer)}</div>
-          ${maxStepsWarn}
-        </div>
-      `;
-    }
-  }
-
-  else if (type === 'done') {
-    // Session saved, nothing special to show
-  }
-}
-
-function getToolBadgeClass(name) {
-  if (name.includes('knowledge')) return 'search';
-  if (name.includes('web')) return 'web';
-  if (name.includes('image') || name.includes('vision')) return 'vision';
-  if (name.includes('calc')) return 'calc';
-  if (name.includes('time')) return 'time';
-  return 'search';
-}
-
-function getToolDisplayName(name) {
-  const map = {
-    search_knowledge_base: '📚 知识库搜索',
-    search_web: '🌐 联网搜索',
-    analyze_image: '🖼 图片分析',
-    calculator: '🔢 计算',
-    get_current_time: '🕐 时间',
-  };
-  return map[name] || name;
-}
-
-function toggleStep(header) {
-  header.parentElement.classList.toggle('open');
-}
-
-// ---------------------------------------------------------------
-// Sessions Page
-// ---------------------------------------------------------------
-async function renderSessions(el) {
-  el.innerHTML = `
-    <div class="section-title">
-      会话历史
-      <div class="section-subtitle">查看 Agent 过去的推理轨迹</div>
-    </div>
-    <div id="sessions-content"><div class="loading"></div></div>
-  `;
-
-  try {
-    const res = await fetch(API + '/sessions');
-    const data = await res.json();
-    state.sessions = data.sessions || [];
-    renderSessionsTable(document.getElementById('sessions-content'));
-  } catch (e) {
-    document.getElementById('sessions-content').innerHTML =
-      '<div class="empty-state"><div class="emoji">😕</div><div class="desc">加载失败</div></div>';
-  }
-}
-
-function renderSessionsTable(el) {
-  if (!state.sessions.length) {
-    el.innerHTML = '<div class="empty-state"><div class="emoji">📭</div><div class="desc">暂无会话记录</div></div>';
-    return;
-  }
-
-  el.innerHTML = `
-    <table class="sessions-table">
-      <thead><tr>
-        <th>问题</th><th>步数</th><th>模板</th><th>时间</th>
-      </tr></thead>
-      <tbody>
-        ${state.sessions.map(s => `
-          <tr onclick="viewTrace('${s.session_id}')">
-            <td>${esc(s.question)}</td>
-            <td style="font-family:var(--font-mono)">${s.total_steps}</td>
-            <td><span class="pill" style="font-size:11px;padding:2px 10px">${esc(s.template)}</span></td>
-            <td style="color:var(--text-3);font-size:12px">${formatTime(s.created_at)}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `;
-}
-
-async function viewTrace(sessionId) {
-  try {
-    const res = await fetch(API + '/sessions/' + sessionId + '/trace');
-    if (!res.ok) throw new Error('Not found');
-    const data = await res.json();
-
-    const main = document.getElementById('main-content');
-    let stepsHtml = data.steps.map(s => {
-      const toolBadge = s.action_name
-        ? `<span class="step-tool-badge ${getToolBadgeClass(s.action_name)}">${getToolDisplayName(s.action_name)}</span>`
-        : '';
-      return `
-        <div class="step-card open">
-          <div class="step-header" onclick="toggleStep(this)">
-            <span class="step-num">Step ${s.step}</span>
-            ${toolBadge}
-            <span class="step-expand">▼</span>
-          </div>
-          <div class="step-body">
-            ${s.thought ? `<div class="step-section thought"><div class="step-label thought-label">💭 THOUGHT</div><div class="step-content">${md(s.thought)}</div></div>` : ''}
-            ${s.action_name ? `<div class="step-section action" style="margin-top:8px"><div class="step-label action-label">🔧 ACTION</div><div class="step-content"><strong>${esc(s.action_name)}</strong><code>${esc(JSON.stringify(s.action_input, null, 2))}</code></div></div>` : ''}
-            ${s.observation ? `<div class="step-section observation" style="margin-top:8px"><div class="step-label obs-label">👁 OBSERVATION</div><div class="step-content">${md(s.observation)}</div></div>` : ''}
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    main.innerHTML = `
-      <div style="margin-bottom:16px">
-        <button onclick="navigate('sessions')" style="font-size:13px;color:var(--accent-blue)">← 返回列表</button>
-      </div>
-      <div class="section-title">
-        推理轨迹
-        <div class="section-subtitle">${esc(data.question)}</div>
-      </div>
-      <div class="stats-grid" style="margin-bottom:20px">
-        <div class="stat-item"><div class="stat-val">${data.total_steps}</div><div class="stat-label">总步数</div></div>
-        <div class="stat-item"><div class="stat-val">${esc(data.template_used)}</div><div class="stat-label">模板</div></div>
-        <div class="stat-item"><div class="stat-val">${data.steps.filter(s=>s.action_name).length}</div><div class="stat-label">工具调用</div></div>
-      </div>
-      <div class="steps-container">${stepsHtml}</div>
-      <div class="answer-block">
-        <div class="answer-label">✨ FINAL ANSWER</div>
-        <div class="answer-text">${md(data.final_answer)}</div>
-      </div>
-    `;
-  } catch (e) {
-    toast('加载轨迹失败', 'error');
-  }
-}
-
-function formatTime(iso) {
-  if (!iso) return '-';
-  try { return new Date(iso).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }
-  catch { return iso.slice(0, 16); }
-}
-
-// ---------------------------------------------------------------
-// Evaluate Page
-// ---------------------------------------------------------------
-function renderEvaluate(el) {
-  el.innerHTML = `
-    <div class="section-title">
-      Agent 评估
-      <div class="section-subtitle">对比 3 种 ReAct 模板的表现</div>
-    </div>
-
-    <div class="card" style="margin-bottom:20px">
-      <div style="font-size:13px;font-weight:600;margin-bottom:12px">测试用例</div>
-      <div id="eval-cases">
-        <div class="eval-case" style="display:flex;gap:8px;margin-bottom:8px">
-          <input type="text" placeholder="问题" class="eval-q" value="深度学习有哪些最新进展？" style="flex:3">
-          <input type="text" placeholder="期望答案（可选）" class="eval-e" style="flex:2">
-        </div>
-        <div class="eval-case" style="display:flex;gap:8px;margin-bottom:8px">
-          <input type="text" placeholder="问题" class="eval-q" value="帮我查一下 Transformer 论文的提出时间，算一下距今多少天" style="flex:3">
-          <input type="text" placeholder="期望答案（可选）" class="eval-e" style="flex:2">
-        </div>
-        <div class="eval-case" style="display:flex;gap:8px;margin-bottom:8px">
-          <input type="text" placeholder="问题" class="eval-q" value="2024年有多少天？" style="flex:3">
-          <input type="text" placeholder="期望答案（可选）" class="eval-e" style="flex:2">
-        </div>
-      </div>
-      <button onclick="addEvalCase()" style="font-size:12px;color:var(--accent-blue);margin-top:4px">+ 添加用例</button>
-    </div>
-
-    <button class="btn-send" onclick="runEvaluation()" id="btn-eval" style="margin-bottom:24px">🚀 开始评估</button>
-
-    <div id="eval-results"></div>
-  `;
-}
-
-function addEvalCase() {
-  const container = document.getElementById('eval-cases');
-  const div = document.createElement('div');
-  div.className = 'eval-case';
-  div.style.cssText = 'display:flex;gap:8px;margin-bottom:8px';
-  div.innerHTML = `
-    <input type="text" placeholder="问题" class="eval-q" style="flex:3">
-    <input type="text" placeholder="期望答案（可选）" class="eval-e" style="flex:2">
-    <button onclick="this.parentElement.remove()" style="color:var(--accent-red);font-size:18px;padding:0 8px">×</button>
-  `;
-  container.appendChild(div);
-}
-
-async function runEvaluation() {
-  const cases = [];
-  document.querySelectorAll('.eval-case').forEach(el => {
-    const q = el.querySelector('.eval-q')?.value?.trim();
-    const e = el.querySelector('.eval-e')?.value?.trim();
-    if (q) cases.push({ question: q, expected_answer: e || null });
-  });
-
-  if (!cases.length) { toast('请添加至少一个测试用例', 'error'); return; }
-
-  const btn = document.getElementById('btn-eval');
-  btn.disabled = true;
-  btn.textContent = '评估中...';
-
-  const resultsDiv = document.getElementById('eval-results');
-  resultsDiv.innerHTML = '<div style="display:flex;align-items:center;gap:8px"><div class="loading"></div><span style="font-size:13px;color:var(--text-3)">正在运行评估，这可能需要几分钟...</span></div>';
-
-  try {
-    const res = await fetch(API + '/evaluate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        test_cases: cases,
-        templates: ['basic', 'structured', 'self_correcting'],
-        max_steps: 10,
-      }),
-    });
-
-    if (!res.ok) throw new Error('Evaluation failed');
-    const data = await res.json();
-    renderEvalResults(resultsDiv, data);
-  } catch (e) {
-    resultsDiv.innerHTML = `<div class="empty-state"><div class="emoji">😕</div><div class="desc">评估失败: ${esc(e.message)}</div></div>`;
-  }
-
-  btn.disabled = false;
-  btn.textContent = '🚀 开始评估';
-}
-
-function renderEvalResults(el, data) {
-  const best = data.results.reduce((a, b) => a.avg_total_score > b.avg_total_score ? a : b, data.results[0]);
-
-  el.innerHTML = `
-    <div style="margin-bottom:16px;padding:14px 18px;background:rgba(0,184,120,.08);border:1px solid rgba(0,184,120,.15);border-radius:var(--radius);font-size:13.5px;color:var(--accent-green)">
-      ${esc(data.recommendation)}
-    </div>
-
-    <div class="eval-grid">
-      ${data.results.map(r => `
-        <div class="eval-card ${r.template === best.template ? 'best' : ''}">
-          <div class="template-name">${r.template === best.template ? '👑 ' : ''}${esc(r.template)}</div>
-          ${evalScoreRow('任务完成', r.avg_task_completion, '--accent-blue')}
-          ${evalScoreRow('工具准确', r.avg_tool_accuracy, '--accent-cyan')}
-          ${evalScoreRow('信息准确', r.avg_hallucination_score, '--accent-green')}
-          ${evalScoreRow('推理质量', r.avg_reasoning_quality, '--accent-purple')}
-          <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)">
-            ${evalScoreRow('加权总分', r.avg_total_score, '--accent-amber')}
-            <div class="score-row" style="margin-top:4px">
-              <span class="label">平均步数</span>
-              <span class="value" style="font-family:var(--font-mono)">${r.avg_steps}</span>
-            </div>
-          </div>
-        </div>
-      `).join('')}
-    </div>
-  `;
-}
-
-function evalScoreRow(label, value, colorVar) {
-  const pct = (value / 5 * 100).toFixed(0);
-  return `
-    <div class="score-row">
-      <span class="label">${label}</span>
-      <div class="score-bar"><div class="fill" style="width:${pct}%;background:var(${colorVar})"></div></div>
-      <span class="value">${value.toFixed(2)}</span>
-    </div>
-  `;
-}
-
-// ---------------------------------------------------------------
-// SSE Parsing Helper — override fetch for proper SSE
-// ---------------------------------------------------------------
-// The default SSE parsing above works with sse-starlette's format.
-// We need to handle the event + data line pairs correctly.
-// Patch the reader loop to track event types properly.
-
-// Override runAgentChat with improved SSE parsing
-const _origRunAgentChat = runAgentChat;
-
-runAgentChat = async function() {
-  const question = document.getElementById('agent-question').value.trim();
-  if (!question) { toast('请输入问题', 'error'); return; }
-
-  const template = document.querySelector('.pill.active')?.dataset.t || 'basic';
-  const maxSteps = parseInt(document.getElementById('max-steps').value) || 10;
-  const resultDiv = document.getElementById('agent-result');
-  const btn = document.getElementById('btn-send');
-
-  btn.disabled = true;
-  btn.textContent = '思考中...';
-
-  resultDiv.innerHTML = `
-    <div class="steps-container" id="steps-container"></div>
-    <div id="answer-area"></div>
-    <div style="display:flex;align-items:center;gap:8px;margin-top:12px" id="streaming-status">
-      <div class="loading"></div>
-      <span style="font-size:12px;color:var(--text-3)">Agent 正在推理...</span>
-    </div>
-  `;
-
-  stepCount = 0;
-
-  try {
-    const body = { question, template, max_steps: maxSteps };
-    if (_imageBase64) {
-      body.image_base64 = _imageBase64;
-    }
-    const response = await fetch(API + '/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.detail || '请求失败');
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let currentEvent = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop(); // Keep incomplete line in buffer
-
-      for (const line of lines) {
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
         if (line.startsWith('event: ')) {
           currentEvent = line.slice(7).trim();
         } else if (line.startsWith('data: ')) {
-          const dataStr = line.slice(6);
+          var dataStr = line.slice(6);
           try {
-            const data = JSON.parse(dataStr);
-            handleSSEEvent(currentEvent, data, resultDiv);
-          } catch (e) { /* ignore parse errors */ }
-          currentEvent = '';
-        } else if (line.trim() === '') {
-          // End of SSE event
+            var data = JSON.parse(dataStr);
+
+            if (currentEvent === 'asr_result') {
+              setStatus('识别结果: ' + (data.text || ''), 'visible');
+            }
+
+            else if (currentEvent === 'thought') {
+              if (!aiBubble) {
+                aiBubble = addMessage('ai', '', null);
+                aiBubble.classList.add('streaming');
+                thinkingDiv = aiBubble.querySelector('.thinking-block');
+                if (thinkingDiv) thinkingDiv.classList.add('visible');
+              }
+              if (thinkingDiv) {
+                thinkingDiv.textContent += (data.thought || '') + '\n';
+                thinkingDiv.scrollTop = thinkingDiv.scrollHeight;
+              }
+            }
+
+            else if (currentEvent === 'answer') {
+              answerText = data.answer || '';
+              if (aiBubble) {
+                aiBubble.classList.remove('streaming');
+                var loadEl = aiBubble.querySelector('.loading-wrap');
+                if (loadEl) loadEl.remove();
+                aiBubble.querySelector('.content').innerHTML = md(answerText);
+                addPlayButton(aiBubble, answerText);
+                if (thinkingDiv && !thinkingDiv.textContent.trim()) {
+                  thinkingDiv.classList.remove('visible');
+                }
+              } else {
+                aiBubble = addMessage('ai', answerText, null);
+                addPlayButton(aiBubble, answerText);
+              }
+              setStatus('', '');
+            }
+
+            else if (currentEvent === 'session') {
+              currentSessionId = data.multimodal_session_id;
+              document.getElementById('session-tag').textContent = '会话: ' + currentSessionId.slice(0, 8) + '...';
+            }
+
+            else if (currentEvent === 'done') {
+              if (data.multimodal_session_id) {
+                currentSessionId = data.multimodal_session_id;
+                document.getElementById('session-tag').textContent = '会话: ' + currentSessionId.slice(0, 8) + '...';
+              }
+              if (data.hit_max_steps) {
+                toast('已达到最大推理步数', 'error');
+              }
+            }
+
+            else if (currentEvent === 'error' || currentEvent === 'asr_error') {
+              toast(data.error || '处理出错', 'error');
+              setStatus('', '');
+            }
+          } catch(e) { /* ignore parse errors */ }
           currentEvent = '';
         }
       }
-    }
-  } catch (e) {
-    toast('请求出错: ' + e.message, 'error');
+
+      return pump();
+    });
   }
 
-  const status = document.getElementById('streaming-status');
-  if (status) status.remove();
+  return pump();
+}
 
-  btn.disabled = false;
-  btn.textContent = '发送';
-};
+// =========================================================================
+// UI helpers
+// =========================================================================
+function addMessage(role, text, imageHtml) {
+  var area = document.getElementById('chat-area');
+  var div = document.createElement('div');
+  div.className = 'msg ' + role;
 
-// ---------------------------------------------------------------
+  var html = '';
+  if (imageHtml) html += imageHtml;
+  if (role === 'ai') {
+    html += '<div class="meta">🤖 AI 助手</div>';
+    html += '<div class="content">' + (text ? md(text) : '<span class="loading"></span> 推理中...') + '</div>';
+    html += '<div class="loading-wrap" style="display:none"><span class="loading"></span></div>';
+    html += '<div class="thinking-block"></div>';
+  } else {
+    html += '<div class="meta">👤 你</div>';
+    html += '<div class="content">' + esc(text) + '</div>';
+  }
+
+  div.innerHTML = html;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+  return div;
+}
+
+function addPlayButton(bubble, text) {
+  if (!text || text.length < 3) return;
+  var btn = document.createElement('button');
+  btn.className = 'btn-play';
+  btn.innerHTML = '🔊 播放语音';
+  btn.onclick = function() { playTTS(text, btn); };
+  bubble.appendChild(btn);
+}
+
+function playTTS(text, btn) {
+  if (btn.classList.contains('playing')) {
+    ttsAudio.pause();
+    btn.classList.remove('playing');
+    btn.innerHTML = '🔊 播放语音';
+    return;
+  }
+
+  btn.classList.add('playing');
+  btn.innerHTML = '<span class="loading"></span> 合成中...';
+
+  fetch(API + '/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      text: text.slice(0, 2000),
+      voice: 'alloy',
+      speed: 1.0
+    })
+  }).then(function(res) {
+    if (!res.ok) throw new Error('TTS 失败');
+    return res.blob();
+  }).then(function(blob) {
+    var url = URL.createObjectURL(blob);
+    ttsAudio.src = url;
+    ttsAudio.onended = function() {
+      btn.classList.remove('playing');
+      btn.innerHTML = '🔊 播放语音';
+      URL.revokeObjectURL(url);
+    };
+    ttsAudio.onerror = function() {
+      toast('语音播放失败', 'error');
+      btn.classList.remove('playing');
+      btn.innerHTML = '🔊 播放语音';
+    };
+    ttsAudio.play();
+    btn.classList.add('playing');
+    btn.innerHTML = '⏸ 播放中...';
+  }).catch(function(e) {
+    toast('语音合成失败: ' + e.message, 'error');
+    btn.classList.remove('playing');
+    btn.innerHTML = '🔊 播放语音';
+  });
+}
+
+function setStatus(msg, cls) {
+  var bar = document.getElementById('status-bar');
+  bar.textContent = msg || '';
+  bar.className = 'status-bar' + (cls ? ' ' + cls : '');
+}
+
+// =========================================================================
+// Enter to send
+// =========================================================================
+document.getElementById('text-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+// =========================================================================
 // Init
-// ---------------------------------------------------------------
-render();
+// =========================================================================
+setStatus('', '');
 </script>
 </body>
 </html>
