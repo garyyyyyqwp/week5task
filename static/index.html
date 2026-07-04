@@ -83,9 +83,9 @@ textarea:focus, input:focus{border-color:var(--accent)}
 .rec-text.active{display:inline}
 
 /* Image preview */
-.img-chip{display:none;align-items:center;gap:6px;padding:4px 10px;background:var(--bg-3);border-radius:20px;font-size:12px;color:var(--text-2)}
+.img-chip{display:none;align-items:center;gap:8px;padding:6px 12px;background:var(--bg-3);border-radius:20px;font-size:12px;color:var(--text-2)}
 .img-chip.visible{display:flex}
-.img-chip .remove{color:var(--accent-red);cursor:pointer;font-weight:700;font-size:14px;line-height:1}
+.img-chip .remove{color:var(--accent-red);cursor:pointer;font-weight:700;font-size:16px;line-height:1;padding:4px 6px;min-width:28px;min-height:28px;display:flex;align-items:center;justify-content:center}
 
 /* Status bar */
 .status-bar{font-size:11px;color:var(--text-3);text-align:center;padding:2px 0;display:none;min-height:18px}
@@ -272,6 +272,12 @@ function downscaleImage(dataUri, maxDim) {
 
 function clearImage(e) {
   e.stopPropagation();
+  currentImageBase64 = null;
+  document.getElementById('img-chip').classList.remove('visible');
+  document.getElementById('camera-input').value = '';
+}
+
+function clearImageSilent() {
   currentImageBase64 = null;
   document.getElementById('img-chip').classList.remove('visible');
   document.getElementById('camera-input').value = '';
@@ -465,6 +471,11 @@ function sendMessage() {
   };
   if (text) body.text = text;
   if (currentImageBase64) body.image_base64 = currentImageBase64;
+  // After sending an image, clear the frontend state — the backend session
+  // already retains the image context for follow-up questions, so there is
+  // no need to re-upload it on every turn.
+  var hadImage = !!currentImageBase64;
+  if (hadImage) clearImageSilent();
 
   fetch(API + '/chat', {
     method: 'POST',
