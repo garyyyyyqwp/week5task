@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工具选择对比小结 — OCR vs 视觉模型</title>
+<style>
+  :root {
+    --bg: #0d1117; --bg2: #161b22; --bg3: #21262d;
+    --fg: #c9d1d9; --fg2: #8b949e; --accent: #58a6ff; --green: #3fb950; --orange: #d2991d; --red: #f85149;
+    --border: #30363d; --radius: 8px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--fg); font: 15px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+  h1 { font-size: 26px; margin-bottom: 8px; }
+  h2 { font-size: 20px; margin: 32px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 16px; margin: 20px 0 8px; color: var(--accent); }
+  p { margin: 8px 0; }
+  .meta { color: var(--fg2); font-size: 13px; margin-bottom: 24px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--border); padding: 10px 14px; text-align: left; }
+  th { background: var(--bg2); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg2); }
+  .best { color: var(--green); font-weight: 600; }
+  .mid { color: var(--orange); }
+  .worst { color: var(--red); }
+  .rec { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+  .rec-yes { background: rgba(63,185,80,.15); color: var(--green); }
+  .rec-no { background: rgba(248,81,73,.15); color: var(--red); }
+  .rec-maybe { background: rgba(210,153,29,.15); color: var(--orange); }
+  .scene { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin: 16px 0; }
+  .scene h4 { margin-bottom: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 13px; }
+  .bar-label { width: 70px; text-align: right; flex-shrink: 0; color: var(--fg2); }
+  .bar-track { flex: 1; height: 8px; background: var(--bg3); border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; }
+  .conclusion { background: linear-gradient(135deg, rgba(88,166,255,.08), rgba(63,185,80,.08)); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin: 24px 0; }
+  @media(max-width:600px) { body { padding: 20px 14px; } }
+</style>
+</head>
+<body>
+
+<h1>OCR 与图片理解 — 工具选择对比小结</h1>
+<p class="meta">文档日期：2026-07-05 &nbsp;|&nbsp; 基于 Week 5 AI 学习助手项目架构分析</p>
+
+<h2>核心结论：不是所有"图里有字"都要调视觉大模型</h2>
+<p>
+三种典型场景对"看懂图片"的需求完全不同，下面从<strong>成本、准确率、延迟</strong>三个维度做对比，
+帮你判断什么时候该用专门 OCR、什么时候该用视觉大模型。
+</p>
+
+<h2>场景 ① 纯文字提取（票据 / 文档扫描）</h2>
+<div class="scene">
+<h4>场景描述</h4>
+<p>拍一张发票、收据或打印文档，只需要提取上面的文字，不需要"理解"内容含义。</p>
+<h4>对比</h4>
+<table>
+<tr><th>方案</th><th>推荐度</th><th>成本</th><th>准确率</th><th>延迟</th><th>说明</th></tr>
+<tr>
+  <td><strong>专用 OCR API</strong>（百度 OCR / Tesseract / PaddleOCR）</td>
+  <td><span class="rec rec-yes">推荐</span></td>
+  <td class="best">极低<br><small>百度 OCR 每天 500 次免费</small></td>
+  <td class="best">高<br><small>对印刷体 99%+</small></td>
+  <td class="best">快<br><small>200-500ms</small></td>
+  <td>专为文字提取优化，支持版面分析、表格识别，成本几乎为零</td>
+</tr>
+<tr>
+  <td><strong>视觉大模型</strong>（glm-4.6v / GPT-4V）</td>
+  <td><span class="rec rec-no">不推荐</span></td>
+  <td class="worst">高<br><small>每张图约 ¥0.01-0.05</small></td>
+  <td>高<br><small>也很准确</small></td>
+  <td class="worst">慢<br><small>1-3s</small></td>
+  <td>能提取，但用大炮打蚊子——功能和成本都不匹配</td>
+</tr>
+</table>
+<h4>本项目实际做法</h4>
+<p>本项目没有接入专门 OCR，因为目标场景是"学习辅导"（看懂题目并讲解），不是"发票录入"。
+如果需要文档扫描功能，可以在 <code>app/services/</code> 下新增 <code>ocr.py</code> 封装百度 OCR SDK 作为独立工具。</p>
+</div>
+
+<h2>场景 ② 图表理解（看懂趋势 / 数据关系）</h2>
+<div class="scene">
+<h4>场景描述</h4>
+<p>一张折线图、柱状图或饼图，需要理解数据趋势、比较大小、解读变化原因。</p>
+<h4>对比</h4>
+<table>
+<tr><th>方案</th><th>推荐度</th><th>成本</th><th>准确率</th><th>延迟</th><th>说明</th></tr>
+<tr>
+  <td><strong>视觉大模型</strong>（glm-4.6v / GPT-4V）</td>
+  <td><span class="rec rec-yes">推荐</span></td>
+  <td class="mid">中<br><small>每张图约 ¥0.01-0.03</small></td>
+  <td class="best">高<br><small>理解趋势和语义</small></td>
+  <td>中<br><small>1-3s</small></td>
+  <td>OCR 只能读出坐标轴数字，视觉模型能理解"增长趋势""拐点""异常值"</td>
+</tr>
+<tr>
+  <td><strong>专用 OCR</strong> + 人工解读</td>
+  <td><span class="rec rec-no">不推荐</span></td>
+  <td>低</td>
+  <td class="worst">低<br><small>只能出数字，不解释含义</small></td>
+  <td>快</td>
+  <td>OCR 出的是原始数字，无法回答"为什么 Q3 下降了"这类问题</td>
+</tr>
+</table>
+<h4>本项目实际做法</h4>
+<p>这正是本项目的核心场景 — 学生拍一张带图表的数学题，模型要同时看懂文字和图表才能给出正确讲解。
+多模态模型（glm-4.6v）是唯一正确的选择。</p>
+</div>
+
+<h2>场景 ③ 手写题目识别（学生手写题拍照提问）</h2>
+<div class="scene">
+<h4>场景描述</h4>
+<p>学生手写了一道数学题或物理题，拍照让 AI 识别题目并讲解。</p>
+<h4>对比</h4>
+<table>
+<tr><th>方案</th><th>推荐度</th><th>成本</th><th>准确率</th><th>延迟</th><th>说明</th></tr>
+<tr>
+  <td><strong>视觉大模型</strong>（glm-4.6v / GPT-4V）</td>
+  <td><span class="rec rec-yes">推荐</span></td>
+  <td class="mid">中<br><small>每张图约 ¥0.01-0.03</small></td>
+  <td class="best">高<br><small>手写识别 + 语义理解一体化</small></td>
+  <td>中<br><small>1-3s</small></td>
+  <td>一步完成"识别手写字 → 理解题意 → 生成讲解"，无需拆分步骤</td>
+</tr>
+<tr>
+  <td><strong>专用 OCR</strong> → 文本模型</td>
+  <td><span class="rec rec-maybe">视情况</span></td>
+  <td>低</td>
+  <td class="mid">中<br><small>手写 OCR 准确率约 85-95%</small></td>
+  <td class="mid">中<br><small>OCR 500ms + LLM 1s</small></td>
+  <td>如果题目没有图表/公式，纯文字 OCR 也可行，但手写识别错误率是瓶颈</td>
+</tr>
+</table>
+<h4>本项目实际做法</h4>
+<p>本项目选择视觉大模型一步到位，因为题目往往包含手写公式、几何图形、坐标系等 OCR 无法正确处理的内容。
+而且"识别 → 理解 → 讲解"在同一步完成，减少了中间环节出错的可能。</p>
+</div>
+
+<h2>三维综合对比</h2>
+
+<h3>成本对比</h3>
+<div class="bar-row"><span class="bar-label">专用 OCR</span><div class="bar-track"><div class="bar-fill" style="width:5%;background:var(--green)"></div></div><span>免费 / 极低</span></div>
+<div class="bar-row"><span class="bar-label">视觉模型</span><div class="bar-track"><div class="bar-fill" style="width:40%;background:var(--orange)"></div></div><span>¥0.01-0.05 / 次</span></div>
+
+<h3>准确率对比</h3>
+<div class="bar-row"><span class="bar-label">专用 OCR</span><div class="bar-track"><div class="bar-fill" style="width:95%;background:var(--green)"></div></div><span>99%+（印刷体）</span></div>
+<div class="bar-row"><span class="bar-label">视觉模型</span><div class="bar-track"><div class="bar-fill" style="width:90%;background:var(--green)"></div></div><span>90%+（含语义理解）</span></div>
+
+<h3>延迟对比</h3>
+<div class="bar-row"><span class="bar-label">专用 OCR</span><div class="bar-track"><div class="bar-fill" style="width:8%;background:var(--green)"></div></div><span>200-500ms</span></div>
+<div class="bar-row"><span class="bar-label">视觉模型</span><div class="bar-track"><div class="bar-fill" style="width:35%;background:var(--orange)"></div></div><span>1-3s</span></div>
+
+<h2>决策速查表</h2>
+<table>
+<tr><th>你的需求是...</th><th>推荐工具</th><th>理由</th></tr>
+<tr>
+  <td>提取发票 / 收据上的文字</td>
+  <td><span class="rec rec-yes">专用 OCR</span></td>
+  <td>成本极低、速度极快、准确率极高，不需要语义理解</td>
+</tr>
+<tr>
+  <td>看懂图表走势并解释原因</td>
+  <td><span class="rec rec-yes">视觉大模型</span></td>
+  <td>OCR 只能读数字，无法理解趋势、拐点、异常值</td>
+</tr>
+<tr>
+  <td>识别手写题目并讲解</td>
+  <td><span class="rec rec-yes">视觉大模型</span></td>
+  <td>手写+公式+图形需要综合理解，一步到位比 OCR→LLM 两步更可靠</td>
+</tr>
+<tr>
+  <td>批量处理 1 万张标准表单</td>
+  <td><span class="rec rec-yes">专用 OCR</span></td>
+  <td>规模 × 视觉模型成本不可接受，OCR 批处理是最优解</td>
+</tr>
+<tr>
+  <td>识别图中有哪些物体并描述</td>
+  <td><span class="rec rec-yes">视觉大模型</span></td>
+  <td>OCR 根本做不了，视觉模型是唯一选择</td>
+</tr>
+</table>
+
+<div class="conclusion">
+<h2>本项目立场</h2>
+<p>
+本项目的核心场景是<strong>学习辅导</strong>：学生拍照提问，AI 看图讲解。这个场景天然需要<strong>视觉理解</strong>而非纯文字提取。
+因此选择 <code>glm-4.6v</code> 作为唯一推理模型，图片直入、一步到位。
+</p>
+<p style="margin-top:12px;">
+如果未来需要处理大批量文档扫描（如学校试卷批量录入），可以在 <code>app/services/tools.py</code> 中新增一个 <code>ocr_extract</code> 工具，
+对有明确"纯文字提取"需求的请求做路由分流。
+</p>
+</div>
+
+</body>
+</html>
