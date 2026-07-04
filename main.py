@@ -1,7 +1,7 @@
-"""AI 研究助手 Agent — FastAPI application entry point.
+"""AI 学习助手 — 多模态 AI 应用 (Week 5)
 
-Week 4: ReAct agent with multi-tool orchestration.
-Builds on Week 3's multimodal RAG + evaluation platform.
+FastAPI application entry point.
+能看、会听、能说的 AI 学习助手，支持拍照提问 + 语音交互 + AI 语音讲解。
 """
 
 import logging
