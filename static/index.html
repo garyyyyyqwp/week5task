@@ -137,7 +137,7 @@ textarea:focus, input:focus{border-color:var(--accent)}
         <span class="icon">🖼</span> 上传
         <input type="file" accept="image/*" class="hidden-input" onchange="handleImageUpload(this)">
       </label>
-      <button class="btn-action" id="btn-record" onmousedown="startRecording()" onmouseup="stopRecording()" onmouseleave="stopRecording()" ontouchstart="startRecording()" ontouchend="stopRecording()">
+      <button class="btn-action" id="btn-record" onmousedown="startRecording()" onmouseup="stopRecording()" onmouseleave="stopRecording()" ontouchstart="startRecording(event)" ontouchend="stopRecording(event)" ontouchcancel="stopRecording(event)">
         <span class="icon">🎤</span> 录音
       </button>
       <span class="rec-dot" id="rec-dot"></span>
@@ -279,9 +279,11 @@ function clearImage(e) {
 // =========================================================================
 // Voice recording
 // =========================================================================
-function startRecording() {
+function startRecording(e) {
   var btn = document.getElementById('btn-record');
   if (btn.classList.contains('recording')) return;
+  // Prevent synthesized mouse events after touch on mobile
+  if (e && e.type === 'touchstart') e.preventDefault();
   audioChunks = [];
 
   navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
@@ -304,9 +306,11 @@ function startRecording() {
   });
 }
 
-function stopRecording() {
+function stopRecording(e) {
   var btn = document.getElementById('btn-record');
   if (!btn.classList.contains('recording')) return;
+  // Prevent synthesized mouse events after touch on mobile
+  if (e && e.type === 'touchend') e.preventDefault();
   btn.classList.remove('recording');
   document.getElementById('rec-dot').classList.remove('active');
   document.getElementById('rec-text').classList.remove('active');
