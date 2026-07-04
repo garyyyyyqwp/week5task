@@ -4,7 +4,7 @@ Template A (basic): Simple instructions, relies on LLM's native reasoning.
 Template B (structured): Forces structured output format for thought/action.
 Template C (self_correcting): Includes error recovery and retry instructions.
 
-All templates assume the main model is multimodal (glm-4.6v-flash) and can
+All templates assume the main model is multimodal (glm-4.6v) and can
 see images directly via structured message content — no separate vision tool.
 """
 

@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "week5-dev",
-      "runtimeExecutable": "C:/Users/35452/Desktop/week4task/.venv/Scripts/python.exe",
+      "runtimeExecutable": "C:/Users/35452/AppData/Local/Python/pythoncore-3.14-64/python.exe",
       "runtimeArgs": ["-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"],
       "port": 8000
     }

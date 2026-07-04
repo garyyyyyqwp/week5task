@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>AI 学习助手 — 能看·会听·会说</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
 <style>
 :root {
   --bg-0: #000; --bg-1: #0a0a0a; --bg-2: #141414; --bg-3: #1a1a1a; --bg-4: #222;
@@ -191,20 +194,79 @@ function md(text) {
     .replace(/\n/g, '<br>');
 }
 
+// Render LaTeX math ($...$, $$...$$, \(...\), \[...\]) inside an element.
+// Used for AI explanations that contain formulas — a core need for a
+// "explain-the-homework" assistant.
+function renderMath(el) {
+  if (!el || !window.renderMathInElement) return;
+  try {
+    window.renderMathInElement(el, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '\\[', right: '\\]', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false }
+      ],
+      throwOnError: false
+    });
+  } catch (e) { /* KaTeX not ready or bad input — leave raw text */ }
+}
+
 // =========================================================================
 // Image handling
 // =========================================================================
+var MAX_IMAGE_DIM = 1024;      // longest edge sent to the model
+var MAX_UPLOAD_BYTES = 10 * 1024 * 1024;  // mirror backend MAX_IMAGE_SIZE_MB
+
 function handleImageUpload(input) {
   var file = input.files[0];
   if (!file) return;
+  if (!file.type || file.type.indexOf('image/') !== 0) {
+    toast('请上传图片文件', 'error');
+    input.value = '';
+    return;
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    toast('图片过大（上限 10MB），请换一张', 'error');
+    input.value = '';
+    return;
+  }
+
   var reader = new FileReader();
   reader.onload = function(e) {
-    currentImageBase64 = e.target.result;
-    document.getElementById('img-chip').classList.add('visible');
-    document.getElementById('img-name').textContent = file.name;
-    toast('图片已加载，AI 将直接查看图片内容', 'info');
+    downscaleImage(e.target.result, MAX_IMAGE_DIM).then(function(dataUri) {
+      currentImageBase64 = dataUri;
+      document.getElementById('img-chip').classList.add('visible');
+      document.getElementById('img-name').textContent = file.name;
+      toast('图片已加载，AI 将直接查看图片内容', 'info');
+    });
   };
   reader.readAsDataURL(file);
+}
+
+// Downscale an image so its longest edge <= maxDim, re-encoding as JPEG to
+// cut upload size / latency / token cost. Falls back to the original data
+// URI if anything goes wrong or the image is already small enough.
+function downscaleImage(dataUri, maxDim) {
+  return new Promise(function(resolve) {
+    var img = new Image();
+    img.onload = function() {
+      var w = img.naturalWidth, h = img.naturalHeight;
+      if (Math.max(w, h) <= maxDim) { resolve(dataUri); return; }
+      var scale = maxDim / Math.max(w, h);
+      var cw = Math.round(w * scale), ch = Math.round(h * scale);
+      try {
+        var canvas = document.createElement('canvas');
+        canvas.width = cw; canvas.height = ch;
+        canvas.getContext('2d').drawImage(img, 0, 0, cw, ch);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      } catch (e) {
+        resolve(dataUri);
+      }
+    };
+    img.onerror = function() { resolve(dataUri); };
+    img.src = dataUri;
+  });
 }
 
 function clearImage(e) {
@@ -223,11 +285,14 @@ function startRecording() {
   audioChunks = [];
 
   navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
-    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-    mediaRecorder.ondataavailable = function(e) { audioChunks.push(e.data); };
+    // Prefer audio/mp4 (AAC) — supported in Chrome/Edge/Safari and accepted
+    // by the Zhipu ASR API. Fall back to webm only if mp4 is unavailable.
+    var mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
+    mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
+    mediaRecorder.ondataavailable = function(e) { if (e.data.size) audioChunks.push(e.data); };
     mediaRecorder.onstop = function() {
       stream.getTracks().forEach(function(t) { t.stop(); });
-      processRecording();
+      processRecording(mimeType);
     };
     mediaRecorder.start();
     btn.classList.add('recording');
@@ -250,11 +315,17 @@ function stopRecording() {
   }
 }
 
-function processRecording() {
+function processRecording(mimeType) {
+  mimeType = mimeType || 'audio/webm';
   if (!audioChunks.length) return;
-  var blob = new Blob(audioChunks, { type: 'audio/webm' });
-  blobToBase64(blob).then(function(base64) {
-    addMessage('user', '🎤 语音输入', null);
+  var blob = new Blob(audioChunks, { type: mimeType });
+
+  // Zhipu ASR only accepts WAV or MP3 content (it checks actual bytes, not
+  // just MIME labels). MediaRecorder produces webm/mp4 which get rejected.
+  // Solution: decode to PCM in the browser via Web Audio API, then re-encode
+  // as a proper WAV file before uploading.
+  blobToWavBase64(blob).then(function(base64) {
+    var userBubble = addMessage('user', '🎤 语音输入…', null);
     setStatus('正在识别语音...', 'visible');
 
     var body = {
@@ -271,7 +342,7 @@ function processRecording() {
       body: JSON.stringify(body)
     }).then(function(res) {
       if (!res.ok) return res.json().then(function(e) { throw new Error(e.detail || '请求失败'); });
-      return handleSSEStream(res);
+      return handleSSEStream(res, userBubble);
     }).catch(function(e) {
       toast('语音处理失败: ' + e.message, 'error');
       setStatus('', '');
@@ -287,6 +358,79 @@ function blobToBase64(blob) {
     };
     reader.readAsDataURL(blob);
   });
+}
+
+// Decode any audio blob (webm/mp4/ogg) to PCM via Web Audio API, then
+// encode as 16-bit mono WAV at 16kHz — the format Zhipu ASR reliably accepts.
+function blobToWavBase64(blob) {
+  return blob.arrayBuffer().then(function(buf) {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    return ctx.decodeAudioData(buf).then(function(audioBuf) {
+      ctx.close();
+      // Downsample to 16kHz mono for smaller upload + ASR compatibility
+      var targetRate = 16000;
+      var srcRate = audioBuf.sampleRate;
+      var srcData = audioBuf.getChannelData(0); // mono
+      var ratio = srcRate / targetRate;
+      var dstLen = Math.floor(srcData.length / ratio);
+      var dst = new Float32Array(dstLen);
+      for (var i = 0; i < dstLen; i++) {
+        dst[i] = srcData[Math.floor(i * ratio)];
+      }
+      // Encode WAV
+      var wavBytes = encodeWAV(dst, targetRate);
+      // Convert to base64
+      var binary = '';
+      var bytes = new Uint8Array(wavBytes);
+      for (var j = 0; j < bytes.length; j++) {
+        binary += String.fromCharCode(bytes[j]);
+      }
+      return btoa(binary);
+    });
+  });
+}
+
+function encodeWAV(samples, sampleRate) {
+  var numChannels = 1;
+  var bitsPerSample = 16;
+  var bytesPerSample = bitsPerSample / 8;
+  var blockAlign = numChannels * bytesPerSample;
+  var byteRate = sampleRate * blockAlign;
+  var dataSize = samples.length * bytesPerSample;
+  var buffer = new ArrayBuffer(44 + dataSize);
+  var view = new DataView(buffer);
+
+  // RIFF header
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(view, 8, 'WAVE');
+  // fmt chunk
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+  // data chunk
+  writeString(view, 36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  // Write PCM samples (clamp to int16 range)
+  var offset = 44;
+  for (var i = 0; i < samples.length; i++) {
+    var s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    offset += 2;
+  }
+  return buffer;
+}
+
+function writeString(view, offset, str) {
+  for (var i = 0; i < str.length; i++) {
+    view.setUint8(offset + i, str.charCodeAt(i));
+  }
 }
 
 // =========================================================================
@@ -335,7 +479,7 @@ function sendMessage() {
 // =========================================================================
 // SSE Stream handling
 // =========================================================================
-function handleSSEStream(response) {
+function handleSSEStream(response, voiceBubble) {
   var reader = response.body.getReader();
   var decoder = new TextDecoder();
   var buffer = '';
@@ -368,6 +512,11 @@ function handleSSEStream(response) {
 
             if (currentEvent === 'asr_result') {
               setStatus('识别结果: ' + (data.text || ''), 'visible');
+              // Replace the placeholder voice bubble with the recognized text
+              if (voiceBubble && data.text) {
+                var vc = voiceBubble.querySelector('.content');
+                if (vc) vc.textContent = '🎤 ' + data.text;
+              }
             }
 
             else if (currentEvent === 'thought') {
@@ -389,13 +538,16 @@ function handleSSEStream(response) {
                 aiBubble.classList.remove('streaming');
                 var loadEl = aiBubble.querySelector('.loading-wrap');
                 if (loadEl) loadEl.remove();
-                aiBubble.querySelector('.content').innerHTML = md(answerText);
+                var contentEl = aiBubble.querySelector('.content');
+                contentEl.innerHTML = md(answerText);
+                renderMath(contentEl);
                 addPlayButton(aiBubble, answerText);
                 if (thinkingDiv && !thinkingDiv.textContent.trim()) {
                   thinkingDiv.classList.remove('visible');
                 }
               } else {
                 aiBubble = addMessage('ai', answerText, null);
+                renderMath(aiBubble.querySelector('.content'));
                 addPlayButton(aiBubble, answerText);
               }
               setStatus('', '');
@@ -483,11 +635,16 @@ function playTTS(text, btn) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       text: text.slice(0, 2000),
-      voice: 'alloy',
       speed: 1.0
     })
   }).then(function(res) {
-    if (!res.ok) throw new Error('TTS 失败');
+    if (!res.ok) {
+      // Surface the real backend reason (e.g. quota exhausted) instead of a
+      // generic message.
+      return res.json().then(function(e) {
+        throw new Error(e.detail || 'TTS 失败');
+      }, function() { throw new Error('TTS 失败'); });
+    }
     return res.blob();
   }).then(function(blob) {
     var url = URL.createObjectURL(blob);

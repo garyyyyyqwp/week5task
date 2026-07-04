@@ -115,6 +115,20 @@ class VoiceLoopRequest(BaseModel):
         default="zh",
         description="Language for ASR transcription",
     )
+    session_id: str | None = Field(
+        default=None,
+        description="Session ID for continuing a previous conversation. "
+                    "Voice loop now integrates with multimodal sessions.",
+    )
+    image_base64: str | None = Field(
+        default=None,
+        description="Optional image context (data:image/...;base64,...). "
+                    "Passes image to the LLM for visual context.",
+    )
+    image_url: str | None = Field(
+        default=None,
+        description="Optional image URL for visual context.",
+    )
     template: str = Field(
         default="basic",
         description="ReAct template for LLM reasoning",

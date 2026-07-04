@@ -35,10 +35,10 @@ def get_env(key: str, default: str | None = None, required: bool = False) -> str
 # --- LLM (Multimodal Vision + Text, supports Function Calling) ---
 OPENAI_API_KEY: str = get_env("OPENAI_API_KEY", required=True)
 OPENAI_BASE_URL: str = get_env("OPENAI_BASE_URL", "https://open.bigmodel.cn/api/paas/v4/")
-OPENAI_MODEL: str = get_env("OPENAI_MODEL", "glm-4.6v-flash")
+OPENAI_MODEL: str = get_env("OPENAI_MODEL", "glm-4.6v")
 
 # --- Vision LLM (deprecated: main model now handles vision directly) ---
-VISION_MODEL: str = get_env("VISION_MODEL", "glm-4.6v-flash")
+VISION_MODEL: str = get_env("VISION_MODEL", "glm-4.6v")
 VISION_API_KEY: str = get_env("VISION_API_KEY", OPENAI_API_KEY)
 VISION_BASE_URL: str = get_env("VISION_BASE_URL", OPENAI_BASE_URL)
 
@@ -75,18 +75,52 @@ AGENT_DEFAULT_STRATEGY: str = get_env("AGENT_DEFAULT_STRATEGY", "basic")
 AGENT_SESSION_DIR: str = get_env("AGENT_SESSION_DIR", "./data/sessions")
 SEARCH_WEB_QUERY_MAX_LENGTH: int = int(get_env("SEARCH_WEB_QUERY_MAX_LENGTH", "200"))
 
+# Provider-specific default endpoints. When a provider is selected but no
+# explicit *_BASE_URL / *_MODEL is set, we derive a consistent default so the
+# key, model name, and endpoint always belong to the same vendor.
+_OPENAI_API_BASE = "https://api.openai.com/v1/"
+_ZHIPU_API_BASE = "https://open.bigmodel.cn/api/paas/v4/"
+
+_PROVIDER_DEFAULTS = {
+    "openai": {
+        "base_url": _OPENAI_API_BASE,
+        "asr_model": "whisper-1",
+        "tts_model": "tts-1",
+    },
+    "zhipu": {
+        "base_url": _ZHIPU_API_BASE,
+        "asr_model": "glm-asr-2512",
+        "tts_model": "cogtts",
+    },
+}
+
+
+def _provider_default(provider: str, key: str) -> str:
+    """Look up a provider-specific default, falling back to openai."""
+    return _PROVIDER_DEFAULTS.get(provider, _PROVIDER_DEFAULTS["openai"])[key]
+
+
 # --- ASR (Speech-to-Text) ---
 ASR_PROVIDER: str = get_env("ASR_PROVIDER", "zhipu")
-ASR_MODEL: str = get_env("ASR_MODEL", "whisper-1")
+ASR_MODEL: str = get_env("ASR_MODEL", _provider_default(ASR_PROVIDER, "asr_model"))
 ASR_API_KEY: str = get_env("ASR_API_KEY", OPENAI_API_KEY)
-ASR_BASE_URL: str = get_env("ASR_BASE_URL", "https://api.openai.com/v1/")
+ASR_BASE_URL: str = get_env(
+    "ASR_BASE_URL", _provider_default(ASR_PROVIDER, "base_url")
+)
 
 # --- TTS (Text-to-Speech) ---
 TTS_PROVIDER: str = get_env("TTS_PROVIDER", "zhipu")
-TTS_MODEL: str = get_env("TTS_MODEL", "tts-1")
-TTS_VOICE: str = get_env("TTS_VOICE", "alloy")
+TTS_MODEL: str = get_env("TTS_MODEL", _provider_default(TTS_PROVIDER, "tts_model"))
+# Default voice is provider-specific: OpenAI uses names like "alloy", while
+# Zhipu cogtts uses its own set (e.g. "tongtong"). If TTS_VOICE isn't set we
+# pick a sensible default for the selected provider.
+TTS_VOICE: str = get_env(
+    "TTS_VOICE", "tongtong" if TTS_PROVIDER == "zhipu" else "alloy"
+)
 TTS_API_KEY: str = get_env("TTS_API_KEY", OPENAI_API_KEY)
-TTS_BASE_URL: str = get_env("TTS_BASE_URL", "https://api.openai.com/v1/")
+TTS_BASE_URL: str = get_env(
+    "TTS_BASE_URL", _provider_default(TTS_PROVIDER, "base_url")
+)
 
 # --- Audio Limits ---
 MAX_AUDIO_SIZE_MB: int = int(get_env("MAX_AUDIO_SIZE_MB", "10"))
@@ -95,3 +129,4 @@ MAX_IMAGE_SIZE_MB: int = int(get_env("MAX_IMAGE_SIZE_MB", "10"))
 
 # --- Multimodal Chat ---
 MULTIMODAL_MAX_HISTORY_TURNS: int = int(get_env("MULTIMODAL_MAX_HISTORY_TURNS", "20"))
+MULTIMODAL_SESSION_DIR: str = get_env("MULTIMODAL_SESSION_DIR", "./data/mm_sessions")

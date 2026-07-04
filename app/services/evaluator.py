@@ -149,18 +149,22 @@ async def evaluate_agent_run(
     )
 
     try:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "你是一个AI系统评估专家。请根据Agent的推理过程和最终回答，客观评估其表现。",
-                },
-                {"role": "user", "content": eval_prompt},
-            ],
-            tools=[_JUDGE_TOOL],
-            tool_choice={"type": "function", "function": {"name": "evaluate_agent"}},
-            temperature=0.1,
+        from app.services.llm import _retry_on_rate_limit
+        response = await _retry_on_rate_limit(
+            client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "你是一个AI系统评估专家。请根据Agent的推理过程和最终回答，客观评估其表现。",
+                    },
+                    {"role": "user", "content": eval_prompt},
+                ],
+                tools=[_JUDGE_TOOL],
+                tool_choice={"type": "function", "function": {"name": "evaluate_agent"}},
+                temperature=0.1,
+            ),
+            operation="Evaluator judge",
         )
 
         # Parse structured output

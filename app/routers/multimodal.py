@@ -5,7 +5,7 @@ import json
 import logging
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
 from app.schemas.multimodal import (
@@ -16,7 +16,12 @@ from app.schemas.multimodal import (
     VoiceLoopResponse,
 )
 from app.services.asr import transcribe, AudioValidationError, ASRError
-from app.services.tts import synthesize, TTSError
+from app.services.tts import (
+    synthesize,
+    synthesize_stream,
+    TTSError,
+    TTS_MEDIA_TYPE,
+)
 from app.services.multimodal_chat import (
     run_multimodal_chat_stream,
     run_voice_loop,
@@ -75,31 +80,59 @@ async def speech_to_text(
 
 @router.post("/tts")
 async def text_to_speech(request: TTSRequest):
-    """Convert text to speech audio.
+    """Convert text to speech audio, streamed for low first-byte latency.
 
-    Returns audio/mpeg bytes that can be played directly in the browser.
+    Streams audio/mpeg chunks as they are synthesized so the browser can
+    begin playback sooner. Input is validated up front so bad requests
+    still return a proper 4xx before the stream starts.
     """
+    from app.services.tts import _validate_tts_input
+
+    # Validate before streaming so we can return a 400 (can't change the
+    # status code once a StreamingResponse has begun sending bytes).
     try:
-        audio_bytes = await synthesize(
-            text=request.text,
-            voice=request.voice,
-            speed=request.speed,
-        )
-        return Response(
-            content=audio_bytes,
-            media_type="audio/mpeg",
-            headers={
-                "Content-Disposition": "inline; filename=speech.mp3",
-                "Cache-Control": "no-cache",
-            },
-        )
+        _validate_tts_input(request.text)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    # Pull the first chunk BEFORE returning the response. This lets provider
+    # errors (quota, bad params, timeout) surface as a proper HTTP 502 with a
+    # real message, instead of a 200 with an empty body that the browser can
+    # only report as a vague "playback failed".
+    stream = synthesize_stream(
+        text=request.text,
+        voice=request.voice,
+        speed=request.speed,
+    )
+    try:
+        first_chunk = await stream.__anext__()
+    except StopAsyncIteration:
+        raise HTTPException(status_code=502, detail="语音合成未返回音频数据")
     except TTSError as e:
         raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
-        logger.error("TTS endpoint error: %s", e)
+        logger.exception("TTS endpoint error")
         raise HTTPException(status_code=500, detail="语音合成服务暂时不可用")
+
+    async def audio_chunks():
+        yield first_chunk
+        try:
+            async for chunk in stream:
+                yield chunk
+        except Exception as e:
+            # Failure mid-stream after headers are sent — can't change status
+            # now, so log and end the body.
+            logger.error("TTS mid-stream error: %s", e)
+
+    ext = "wav" if TTS_MEDIA_TYPE == "audio/wav" else "mp3"
+    return StreamingResponse(
+        audio_chunks(),
+        media_type=TTS_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": f"inline; filename=speech.{ext}",
+            "Cache-Control": "no-cache",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +183,9 @@ async def voice_loop(request: VoiceLoopRequest):
             language=request.language,
             template=request.template,
             max_steps=request.max_steps,
+            session_id=request.session_id,
+            image_base64=request.image_base64,
+            image_url=request.image_url,
         )
         return VoiceLoopResponse(**result)
     except Exception as e:

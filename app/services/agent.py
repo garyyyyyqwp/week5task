@@ -59,6 +59,7 @@ async def run_agent_stream(
     template: str = "basic",
     max_steps: int | None = None,
     image_url: str | None = None,
+    history: list[dict] | None = None,
 ) -> AsyncIterator[dict]:
     """Run the ReAct agent loop, yielding SSE events for each step.
 
@@ -75,6 +76,9 @@ async def run_agent_stream(
         template: ReAct prompt template name (basic/structured/self_correcting).
         max_steps: Maximum number of reasoning steps (default from config).
         image_url: Optional image URL for image analysis scenarios.
+        history: Optional conversation history (user/assistant message pairs)
+                 for multi-turn context. Each dict: {"role": "user"|"assistant",
+                 "content": str | list}.
 
     Yields:
         Dict with "event" and "data" keys for SSE formatting.
@@ -86,7 +90,7 @@ async def run_agent_stream(
     system_prompt = REACT_PROMPT_TEMPLATES.get(template, REACT_PROMPT_TEMPLATES["basic"])
 
     # Build user message — images go directly into structured content
-    # so the multimodal model (glm-4.6v-flash) can SEE the image
+    # so the multimodal model (glm-4.6v) can SEE the image
     # instead of reading a text description from a separate vision tool.
     user_content: list[dict] = [{"type": "text", "text": question}]
     if image_url:
@@ -97,8 +101,10 @@ async def run_agent_stream(
 
     messages: list[dict] = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_content},
     ]
+    if history:
+        messages.extend(history)
+    messages.append({"role": "user", "content": user_content})
 
     steps: list[AgentStep] = []
     step_num = 0
@@ -108,31 +114,26 @@ async def run_agent_stream(
     while step_num < max_steps:
         step_num += 1
 
-        # Use vision model for the first step when an image is present,
-        # because the default text-only model (e.g. glm-4-flash) rejects
-        # image_url content with error code 1210.
-        step_model = VISION_MODEL if (image_url and step_num == 1) else default_model
-
-        # For text-only models (step 2+), strip image_url from user message
+        # When an image is present, use the multimodal (vision) model for
+        # EVERY step and keep the image in context the whole time. The main
+        # model (glm-4.6v) is itself multimodal, so there is no reason to
+        # strip the image after step 1 — doing so would make the model
+        # "forget" the picture as soon as it calls any tool (e.g. calculator),
+        # which is fatal for step-by-step problem explanation.
+        step_model = VISION_MODEL if image_url else default_model
         step_messages = messages
-        if image_url and step_num > 1:
-            # Remove image_url from the user message, keep only text
-            step_messages = []
-            for msg in messages:
-                if msg["role"] == "user" and isinstance(msg["content"], list):
-                    # Filter out image_url items, keep only text
-                    text_content = next((item["text"] for item in msg["content"] if item["type"] == "text"), "")
-                    step_messages.append({"role": "user", "content": text_content})
-                else:
-                    step_messages.append(msg)
 
         try:
-            response = await client.chat.completions.create(
-                model=step_model,
-                messages=step_messages,
-                tools=TOOL_DEFINITIONS,
-                tool_choice="auto",
-                temperature=0.3,
+            from app.services.llm import _retry_on_rate_limit
+            response = await _retry_on_rate_limit(
+                client.chat.completions.create(
+                    model=step_model,
+                    messages=step_messages,
+                    tools=TOOL_DEFINITIONS,
+                    tool_choice="auto",
+                    temperature=0.3,
+                ),
+                operation=f"Agent step {step_num}",
             )
         except Exception as e:
             logger.error("LLM call failed at step %d: %s", step_num, e)
@@ -278,6 +279,7 @@ async def run_agent_sync(
     template: str = "basic",
     max_steps: int | None = None,
     image_url: str | None = None,
+    history: list[dict] | None = None,
 ) -> AgentResult:
     """Run the agent synchronously (collect all events and return final result).
 
@@ -289,6 +291,7 @@ async def run_agent_sync(
         template: ReAct prompt template name.
         max_steps: Maximum number of reasoning steps.
         image_url: Optional image URL.
+        history: Optional conversation history for multi-turn context.
 
     Returns:
         AgentResult with full reasoning trace.
@@ -299,6 +302,7 @@ async def run_agent_sync(
         template=template,
         max_steps=max_steps,
         image_url=image_url,
+        history=history,
     ):
         # Just consume all events — the session is saved in run_agent_stream
         pass

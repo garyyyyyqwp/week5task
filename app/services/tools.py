@@ -4,7 +4,7 @@ Tools are defined as OpenAI function definitions for LLM function calling.
 Each tool has a corresponding executor function dispatched by execute_tool().
 
 The analyze_image tool has been REMOVED — the main reasoning model
-(glm-4.6v-flash) is now multimodal and can see images directly via
+(glm-4.6v) is now multimodal and can see images directly via
 structured message content, eliminating the lossy "image → text summary →
 text model" pipeline.
 """

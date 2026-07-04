@@ -4,6 +4,7 @@ Week 4: ReAct agent with multi-tool orchestration.
 Builds on Week 3's multimodal RAG + evaluation platform.
 """
 
+import logging
 import os
 from pathlib import Path
 
@@ -13,6 +14,8 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.routers import agent, multimodal
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -30,10 +33,21 @@ app = FastAPI(
 # Middleware
 # ---------------------------------------------------------------------------
 
+# CORS: origins come from the CORS_ALLOW_ORIGINS env var (comma-separated).
+# Note the browser spec forbids allow_credentials=True together with the "*"
+# wildcard, so we only enable credentials when explicit origins are listed.
+_cors_env = os.getenv("CORS_ALLOW_ORIGINS", "*").strip()
+if _cors_env == "*":
+    _allow_origins = ["*"]
+    _allow_credentials = False
+else:
+    _allow_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
+    _allow_credentials = True
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_allow_origins,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -49,6 +63,7 @@ async def startup():
     for d in [
         "./chroma_data",
         "./data/sessions",
+        "./data/mm_sessions",
         "./data/images",
         "./data/audio",
     ]:
@@ -109,7 +124,14 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
-    """Handle unhandled exceptions."""
+    """Handle unhandled exceptions.
+
+    Logs the full traceback server-side (so failures are debuggable) while
+    returning a generic message to the client (so internals aren't leaked).
+    """
+    logger.exception(
+        "Unhandled exception on %s %s", request.method, request.url.path
+    )
     return JSONResponse(
         status_code=500,
         content={

@@ -363,9 +363,20 @@ def mock_tts(monkeypatch):
     ) -> bytes:
         return b"\xff\xfb\x90\x00" + b"\x00" * 256
 
+    async def _mock_synthesize_stream(
+        text: str,
+        voice: str | None = None,
+        speed: float = 1.0,
+        response_format: str = "mp3",
+    ):
+        yield b"\xff\xfb\x90\x00" + b"\x00" * 256
+
     monkeypatch.setattr("app.services.tts.synthesize", _mock_synthesize)
     monkeypatch.setattr(
         "app.services.tts.synthesize_streaming", _mock_synthesize_streaming
+    )
+    monkeypatch.setattr(
+        "app.services.tts.synthesize_stream", _mock_synthesize_stream
     )
     return _mock_synthesize
 
