@@ -669,6 +669,13 @@ function playTTS(text, btn) {
   btn.classList.add('playing');
   btn.innerHTML = '<span class="loading"></span> 合成中...';
 
+  // Prime the audio element synchronously during the user gesture — on mobile,
+  // browsers require play() to be initiated by a direct tap, but fetch() breaks
+  // that chain. load() here binds the element to the gesture context so that
+  // the later play() (inside the async callback) is permitted.
+  ttsAudio.src = '';
+  ttsAudio.load();
+
   fetch(API + '/tts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -678,8 +685,6 @@ function playTTS(text, btn) {
     })
   }).then(function(res) {
     if (!res.ok) {
-      // Surface the real backend reason (e.g. quota exhausted) instead of a
-      // generic message.
       return res.json().then(function(e) {
         throw new Error(e.detail || 'TTS 失败');
       }, function() { throw new Error('TTS 失败'); });
@@ -698,7 +703,12 @@ function playTTS(text, btn) {
       btn.classList.remove('playing');
       btn.innerHTML = '🔊 播放语音';
     };
-    ttsAudio.play();
+    // play() returns a promise; mobile browsers may reject if not primed
+    ttsAudio.play().catch(function() {
+      toast('播放被浏览器阻止，请重试', 'error');
+      btn.classList.remove('playing');
+      btn.innerHTML = '🔊 播放语音';
+    });
     btn.classList.add('playing');
     btn.innerHTML = '⏸ 播放中...';
   }).catch(function(e) {
