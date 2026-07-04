@@ -114,26 +114,18 @@ async def run_agent_stream(
     while step_num < max_steps:
         step_num += 1
 
-        # When an image is present, use the multimodal (vision) model for
-        # EVERY step and keep the image in context the whole time. The main
-        # model (glm-4.6v) is itself multimodal, so there is no reason to
-        # strip the image after step 1 — doing so would make the model
-        # "forget" the picture as soon as it calls any tool (e.g. calculator),
-        # which is fatal for step-by-step problem explanation.
         step_model = VISION_MODEL if image_url else default_model
         step_messages = messages
 
+        # Use streaming to enable token-by-token output for the final answer
         try:
-            from app.services.llm import _retry_on_rate_limit
-            response = await _retry_on_rate_limit(
-                client.chat.completions.create(
-                    model=step_model,
-                    messages=step_messages,
-                    tools=TOOL_DEFINITIONS,
-                    tool_choice="auto",
-                    temperature=0.3,
-                ),
-                operation=f"Agent step {step_num}",
+            stream = await client.chat.completions.create(
+                model=step_model,
+                messages=step_messages,
+                tools=TOOL_DEFINITIONS,
+                tool_choice="auto",
+                temperature=0.3,
+                stream=True,
             )
         except Exception as e:
             logger.error("LLM call failed at step %d: %s", step_num, e)
@@ -147,57 +139,98 @@ async def run_agent_stream(
             final_answer = "抱歉，AI服务暂时不可用，请稍后重试。"
             break
 
-        choice = response.choices[0]
-        assistant_message = choice.message
+        # Stream response in real-time.
+        # Strategy: yield answer_chunk events for content as it arrives.
+        # If tool_calls appear, switch to "tool mode" — treat content as thought.
+        collected_content = ""
+        collected_tool_calls: dict[int, dict] = {}
+        answer_chunks_yielded = False
 
-        # Extract thought (content in the assistant message)
-        # Clean up: LLM sometimes leaks tool_calls metadata into the content field
-        raw_thought = assistant_message.content or ""
-        thought = _clean_thought(raw_thought)
-        if thought:
-            yield {
-                "event": "thought",
-                "data": json.dumps(
-                    {"step": step_num, "thought": thought},
-                    ensure_ascii=False,
-                ),
-            }
+        async for chunk in stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
 
-        # Check if LLM wants to call tools
-        if assistant_message.tool_calls:
-            # Append assistant message with tool calls to conversation history
-            # We need to serialize the message properly for the API
+            # Accumulate tool calls
+            if delta.tool_calls:
+                for tc_delta in delta.tool_calls:
+                    idx = tc_delta.index
+                    if idx not in collected_tool_calls:
+                        collected_tool_calls[idx] = {
+                            "id": tc_delta.id or "",
+                            "function": {"name": "", "arguments": ""},
+                        }
+                    if tc_delta.id:
+                        collected_tool_calls[idx]["id"] = tc_delta.id
+                    if tc_delta.function:
+                        if tc_delta.function.name:
+                            collected_tool_calls[idx]["function"]["name"] += tc_delta.function.name
+                        if tc_delta.function.arguments:
+                            collected_tool_calls[idx]["function"]["arguments"] += tc_delta.function.arguments
+
+            # Accumulate and stream content tokens
+            if delta.content:
+                collected_content += delta.content
+                # Only yield answer_chunk if no tool_calls have been seen
+                if not collected_tool_calls:
+                    answer_chunks_yielded = True
+                    yield {
+                        "event": "answer_chunk",
+                        "data": json.dumps(
+                            {"chunk": delta.content},
+                            ensure_ascii=False,
+                        ),
+                    }
+
+        if collected_tool_calls:
+            # Tool-calling step — content is thought, not answer
+            raw_thought = _clean_thought(collected_content)
+
+            # If we accidentally streamed answer_chunks, send a reset event
+            if answer_chunks_yielded:
+                yield {
+                    "event": "answer_reset",
+                    "data": json.dumps({"reason": "tool_call"}, ensure_ascii=False),
+                }
+
+            if raw_thought:
+                yield {
+                    "event": "thought",
+                    "data": json.dumps(
+                        {"step": step_num, "thought": raw_thought},
+                        ensure_ascii=False,
+                    ),
+                }
+
+            tool_calls_list = [
+                {
+                    "id": collected_tool_calls[i]["id"],
+                    "type": "function",
+                    "function": collected_tool_calls[i]["function"],
+                }
+                for i in sorted(collected_tool_calls.keys())
+            ]
+
             messages.append({
                 "role": "assistant",
-                "content": assistant_message.content,
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments,
-                        },
-                    }
-                    for tc in assistant_message.tool_calls
-                ],
+                "content": collected_content or None,
+                "tool_calls": tool_calls_list,
             })
 
-            for tool_call in assistant_message.tool_calls:
-                fn_name = tool_call.function.name
+            for tc in tool_calls_list:
+                fn_name = tc["function"]["name"]
                 try:
-                    fn_args = json.loads(tool_call.function.arguments)
+                    fn_args = json.loads(tc["function"]["arguments"])
                 except json.JSONDecodeError:
                     fn_args = {"error": "参数解析失败"}
 
                 step = AgentStep(
                     step_number=step_num,
-                    thought=thought,
+                    thought=raw_thought,
                     action_name=fn_name,
                     action_input=fn_args,
                 )
 
-                # Yield action event
                 yield {
                     "event": "action",
                     "data": json.dumps(
@@ -206,12 +239,10 @@ async def run_agent_stream(
                     ),
                 }
 
-                # Execute tool
                 observation = await execute_tool(fn_name, fn_args)
                 step.observation = observation
                 steps.append(step)
 
-                # Yield observation event (truncate for display)
                 display_obs = observation[:500] + "..." if len(observation) > 500 else observation
                 yield {
                     "event": "observation",
@@ -221,15 +252,14 @@ async def run_agent_stream(
                     ),
                 }
 
-                # Append tool result to conversation
                 messages.append({
                     "role": "tool",
-                    "tool_call_id": tool_call.id,
+                    "tool_call_id": tc["id"],
                     "content": observation,
                 })
         else:
-            # No tool calls — this is the Final Answer
-            final_answer = assistant_message.content or ""
+            # No tool calls — content was streamed as answer_chunk events
+            final_answer = collected_content
             break
     else:
         # Max steps reached without final answer
@@ -237,7 +267,7 @@ async def run_agent_stream(
         if not final_answer:
             final_answer = "抱歉，我无法在限定步骤内完成此问题。请尝试简化问题或增加步骤限制。"
 
-    # Yield final answer
+    # Yield final complete answer (signals end of streaming)
     yield {
         "event": "answer",
         "data": json.dumps(

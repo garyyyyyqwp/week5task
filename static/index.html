@@ -42,7 +42,8 @@ textarea:focus, input:focus{border-color:var(--accent)}
 .msg .content{white-space:pre-wrap}
 .msg .content code{font-family:var(--font-mono);background:var(--bg-4);padding:1px 5px;border-radius:3px;font-size:12.5px}
 .msg .content strong{color:var(--text-1)}
-.msg .streaming{cursor:default}
+.msg .streaming .content::after{content:'▍';animation:blink 1s steps(2) infinite;color:var(--primary)}
+@keyframes blink{0%{opacity:1}50%{opacity:0}}
 
 /* Image in message */
 .msg .msg-image{max-width:180px;border-radius:var(--radius-sm);margin-bottom:6px;overflow:hidden}
@@ -523,6 +524,15 @@ function handleSSEStream(response, voiceBubble) {
               }
             }
 
+            else if (currentEvent === 'answer_reset') {
+              // Tool calls appeared after streaming started — reset answer text
+              answerText = '';
+              if (aiBubble) {
+                var contentEl = aiBubble.querySelector('.content');
+                contentEl.innerHTML = '';
+              }
+            }
+
             else if (currentEvent === 'thought') {
               if (!aiBubble) {
                 aiBubble = addMessage('ai', '', null);
@@ -536,8 +546,33 @@ function handleSSEStream(response, voiceBubble) {
               }
             }
 
+            else if (currentEvent === 'answer_chunk') {
+              // Progressive streaming: append each token chunk
+              if (!aiBubble) {
+                aiBubble = addMessage('ai', '', null);
+                aiBubble.classList.add('streaming');
+                thinkingDiv = aiBubble.querySelector('.thinking-block');
+              }
+              // Hide thinking block and loading when answer starts
+              if (answerText === '' && aiBubble) {
+                var loadEl = aiBubble.querySelector('.loading-wrap');
+                if (loadEl) loadEl.remove();
+                if (thinkingDiv && thinkingDiv.textContent.trim()) {
+                  thinkingDiv.classList.add('visible');
+                } else if (thinkingDiv) {
+                  thinkingDiv.classList.remove('visible');
+                }
+              }
+              answerText += (data.chunk || '');
+              var contentEl = aiBubble.querySelector('.content');
+              contentEl.innerHTML = md(answerText);
+              contentEl.scrollIntoView({ block: 'end', behavior: 'smooth' });
+              setStatus('AI 正在输出...', 'visible');
+            }
+
             else if (currentEvent === 'answer') {
-              answerText = data.answer || '';
+              // Final complete answer — render with math and add play button
+              answerText = data.answer || answerText;
               if (aiBubble) {
                 aiBubble.classList.remove('streaming');
                 var loadEl = aiBubble.querySelector('.loading-wrap');
