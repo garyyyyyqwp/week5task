@@ -680,21 +680,13 @@ function playTTS(text, btn) {
   btn.classList.add('playing');
   btn.innerHTML = '<span class="loading"></span> 合成中...';
 
-  // Split text into sentences for faster first-audio playback.
-  // Play the first chunk immediately, queue the rest.
   var chunks = splitTTSChunks(text.slice(0, 2000), 300);
   var chunkIndex = 0;
+  var preBuffered = null;  // { blob, url } ready before current chunk ends
+  var stopped = false;
 
-  function playNextChunk() {
-    if (chunkIndex >= chunks.length) {
-      btn.classList.remove('playing');
-      btn.innerHTML = '🔊 播放语音';
-      return;
-    }
-    var chunk = chunks[chunkIndex];
-    chunkIndex++;
-
-    fetch(API + '/tts', {
+  function fetchChunk(chunk) {
+    return fetch(API + '/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: chunk, speed: 1.0 })
@@ -706,34 +698,85 @@ function playTTS(text, btn) {
       }
       return res.blob();
     }).then(function(blob) {
-      var url = URL.createObjectURL(blob);
-      ttsAudio.src = url;
-      ttsAudio.onended = function() {
-        URL.revokeObjectURL(url);
-        playNextChunk();
-      };
-      ttsAudio.onerror = function() {
-        toast('语音播放失败', 'error');
-        btn.classList.remove('playing');
-        btn.innerHTML = '🔊 播放语音';
-      };
-      btn.innerHTML = '⏸ 播放中...';
-      ttsAudio.play().catch(function() {
-        toast('播放被浏览器阻止，请重试', 'error');
-        btn.classList.remove('playing');
-        btn.innerHTML = '🔊 播放语音';
-      });
-    }).catch(function(e) {
-      toast('语音合成失败: ' + e.message, 'error');
-      btn.classList.remove('playing');
-      btn.innerHTML = '🔊 播放语音';
+      return { blob: blob, url: URL.createObjectURL(blob) };
     });
   }
 
-  // Prime audio for mobile gesture policy
-  ttsAudio.src = '';
-  ttsAudio.load();
-  playNextChunk();
+  // Pre-fetch next chunk while current is playing
+  function startPreBuffer() {
+    if (stopped || chunkIndex >= chunks.length) {
+      preBuffered = null;
+      return;
+    }
+    fetchChunk(chunks[chunkIndex]).then(function(result) {
+      if (stopped) { URL.revokeObjectURL(result.url); return; }
+      preBuffered = result;
+      chunkIndex++;
+    }).catch(function(e) {
+      if (!stopped) { toast('语音合成失败: ' + e.message, 'error'); stop(); }
+    });
+  }
+
+  function stop() {
+    stopped = true;
+    if (preBuffered) { URL.revokeObjectURL(preBuffered.url); preBuffered = null; }
+    ttsAudio.pause();
+    ttsAudio.src = '';
+    btn.classList.remove('playing');
+    btn.innerHTML = '🔊 播放语音';
+  }
+
+  function playBlob(result) {
+    ttsAudio.src = result.url;
+    ttsAudio.onended = function() {
+      URL.revokeObjectURL(result.url);
+      if (preBuffered) {
+        // Next chunk already buffered — play instantly with zero gap
+        var next = preBuffered;
+        preBuffered = null;
+        startPreBuffer();
+        playBlob(next);
+      } else if (chunkIndex >= chunks.length) {
+        btn.classList.remove('playing');
+        btn.innerHTML = '🔊 播放语音';
+      } else {
+        // Pre-buffer still loading — poll until ready
+        btn.innerHTML = '<span class="loading"></span> 缓冲中...';
+        var poll = setInterval(function() {
+          if (stopped) { clearInterval(poll); return; }
+          if (preBuffered) {
+            clearInterval(poll);
+            btn.innerHTML = '⏸ 播放中...';
+            var next = preBuffered;
+            preBuffered = null;
+            startPreBuffer();
+            playBlob(next);
+          }
+        }, 100);
+      }
+    };
+    ttsAudio.onerror = function() {
+      URL.revokeObjectURL(result.url);
+      toast('语音播放失败', 'error');
+      stop();
+    };
+    btn.innerHTML = '⏸ 播放中...';
+    ttsAudio.play().catch(function() {
+      toast('播放被浏览器阻止，请重试', 'error');
+      stop();
+    });
+  }
+
+  // Fetch first chunk, immediately pre-buffer second in parallel
+  fetchChunk(chunks[chunkIndex]).then(function(result) {
+    if (stopped) { URL.revokeObjectURL(result.url); return; }
+    chunkIndex++;
+    startPreBuffer();
+    playBlob(result);
+  }).catch(function(e) {
+    toast('语音合成失败: ' + e.message, 'error');
+    stop();
+  });
 }
 
 function splitTTSChunks(text, maxLen) {
