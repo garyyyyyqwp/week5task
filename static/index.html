@@ -680,53 +680,78 @@ function playTTS(text, btn) {
   btn.classList.add('playing');
   btn.innerHTML = '<span class="loading"></span> 合成中...';
 
-  // Prime the audio element synchronously during the user gesture — on mobile,
-  // browsers require play() to be initiated by a direct tap, but fetch() breaks
-  // that chain. load() here binds the element to the gesture context so that
-  // the later play() (inside the async callback) is permitted.
-  ttsAudio.src = '';
-  ttsAudio.load();
+  // Split text into sentences for faster first-audio playback.
+  // Play the first chunk immediately, queue the rest.
+  var chunks = splitTTSChunks(text.slice(0, 2000), 300);
+  var chunkIndex = 0;
 
-  fetch(API + '/tts', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      text: text.slice(0, 2000),
-      speed: 1.0
-    })
-  }).then(function(res) {
-    if (!res.ok) {
-      return res.json().then(function(e) {
-        throw new Error(e.detail || 'TTS 失败');
-      }, function() { throw new Error('TTS 失败'); });
+  function playNextChunk() {
+    if (chunkIndex >= chunks.length) {
+      btn.classList.remove('playing');
+      btn.innerHTML = '🔊 播放语音';
+      return;
     }
-    return res.blob();
-  }).then(function(blob) {
-    var url = URL.createObjectURL(blob);
-    ttsAudio.src = url;
-    ttsAudio.onended = function() {
-      btn.classList.remove('playing');
-      btn.innerHTML = '🔊 播放语音';
-      URL.revokeObjectURL(url);
-    };
-    ttsAudio.onerror = function() {
-      toast('语音播放失败', 'error');
-      btn.classList.remove('playing');
-      btn.innerHTML = '🔊 播放语音';
-    };
-    // play() returns a promise; mobile browsers may reject if not primed
-    ttsAudio.play().catch(function() {
-      toast('播放被浏览器阻止，请重试', 'error');
+    var chunk = chunks[chunkIndex];
+    chunkIndex++;
+
+    fetch(API + '/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: chunk, speed: 1.0 })
+    }).then(function(res) {
+      if (!res.ok) {
+        return res.json().then(function(e) {
+          throw new Error(e.detail || 'TTS 失败');
+        }, function() { throw new Error('TTS 失败'); });
+      }
+      return res.blob();
+    }).then(function(blob) {
+      var url = URL.createObjectURL(blob);
+      ttsAudio.src = url;
+      ttsAudio.onended = function() {
+        URL.revokeObjectURL(url);
+        playNextChunk();
+      };
+      ttsAudio.onerror = function() {
+        toast('语音播放失败', 'error');
+        btn.classList.remove('playing');
+        btn.innerHTML = '🔊 播放语音';
+      };
+      btn.innerHTML = '⏸ 播放中...';
+      ttsAudio.play().catch(function() {
+        toast('播放被浏览器阻止，请重试', 'error');
+        btn.classList.remove('playing');
+        btn.innerHTML = '🔊 播放语音';
+      });
+    }).catch(function(e) {
+      toast('语音合成失败: ' + e.message, 'error');
       btn.classList.remove('playing');
       btn.innerHTML = '🔊 播放语音';
     });
-    btn.classList.add('playing');
-    btn.innerHTML = '⏸ 播放中...';
-  }).catch(function(e) {
-    toast('语音合成失败: ' + e.message, 'error');
-    btn.classList.remove('playing');
-    btn.innerHTML = '🔊 播放语音';
-  });
+  }
+
+  // Prime audio for mobile gesture policy
+  ttsAudio.src = '';
+  ttsAudio.load();
+  playNextChunk();
+}
+
+function splitTTSChunks(text, maxLen) {
+  // Split at sentence boundaries, keep chunks under maxLen chars
+  var separators = /([。！？\n.!?]+)/g;
+  var parts = text.split(separators);
+  var chunks = [];
+  var current = '';
+  for (var i = 0; i < parts.length; i++) {
+    if (current.length + parts[i].length > maxLen && current.length > 0) {
+      chunks.push(current);
+      current = parts[i];
+    } else {
+      current += parts[i];
+    }
+  }
+  if (current.trim()) chunks.push(current);
+  return chunks.length > 0 ? chunks : [text];
 }
 
 function setStatus(msg, cls) {
